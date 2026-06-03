@@ -387,6 +387,61 @@ if (pickerApplyBtn) {
   });
 }
 
+function loadPaletteFromImage(img, markAsEdited = false) {
+  paletteCanvas.width = img.width;
+  paletteCanvas.height = img.height;
+  const ctx = paletteCanvas.getContext('2d');
+  ctx.drawImage(img, 0, 0);
+
+  const imgData = ctx.getImageData(0, 0, img.width, img.height);
+  const data = imgData.data;
+
+  paletteGrid.innerHTML = '';
+  state.customPaletteColors = [];
+
+  const numColors = img.width * img.height;
+  for (let i = 0; i < numColors; i++) {
+    const r = data[i * 4];
+    const g = data[i * 4 + 1];
+    const b = data[i * 4 + 2];
+    const a = data[i * 4 + 3];
+
+    const hex = rgbToHex(r, g, b);
+    state.customPaletteColors.push({ r, g, b, a, hex, index: i });
+
+    const swatch = document.createElement('div');
+    swatch.className = 'palette-swatch';
+    swatch.style.backgroundColor = hex;
+    swatch.title = `Color ${i + 1}: ${hex}`;
+    
+    if (a === 0) {
+      swatch.style.background = 'repeating-linear-gradient(45deg, #ccc, #ccc 2px, #fff 2px, #fff 4px)';
+      swatch.title = `Color ${i + 1}: Transparent`;
+    }
+
+    swatch.addEventListener('click', () => {
+      activeSwatchIndex = i;
+      const startHex = a === 0 ? '#ffffff' : hex;
+      const rgb = hexToRgb(startHex);
+      if (rgb) {
+        const hsv = rgbToHsv(rgb.r, rgb.g, rgb.b);
+        pickerHue = hsv.h;
+        pickerSat = hsv.s;
+        pickerVal = hsv.v;
+
+        if (pickerHueSlider) pickerHueSlider.value = pickerHue;
+        updatePickerColor();
+        if (pickerPanel) pickerPanel.classList.remove('hidden');
+      }
+    });
+
+    paletteGrid.appendChild(swatch);
+  }
+
+  paletteGridContainer.classList.remove('hidden');
+  state.customPaletteEdited = markAsEdited;
+}
+
 // Generate & Load Colors (Pure Client-Side via Wasm FFmpeg)
 if (generatePaletteBtn) {
   generatePaletteBtn.addEventListener('click', async () => {
@@ -431,58 +486,7 @@ if (generatePaletteBtn) {
       // Load blob into canvas
       const img = new Image();
       img.onload = function () {
-        paletteCanvas.width = img.width;
-        paletteCanvas.height = img.height;
-        const ctx = paletteCanvas.getContext('2d');
-        ctx.drawImage(img, 0, 0);
-
-        const imgData = ctx.getImageData(0, 0, img.width, img.height);
-        const data = imgData.data;
-
-        paletteGrid.innerHTML = '';
-        state.customPaletteColors = [];
-
-        const numColors = img.width * img.height;
-        for (let i = 0; i < numColors; i++) {
-          const r = data[i * 4];
-          const g = data[i * 4 + 1];
-          const b = data[i * 4 + 2];
-          const a = data[i * 4 + 3];
-
-          const hex = rgbToHex(r, g, b);
-          state.customPaletteColors.push({ r, g, b, a, hex, index: i });
-
-          const swatch = document.createElement('div');
-          swatch.className = 'palette-swatch';
-          swatch.style.backgroundColor = hex;
-          swatch.title = `Color ${i + 1}: ${hex}`;
-          
-          if (a === 0) {
-            swatch.style.background = 'repeating-linear-gradient(45deg, #ccc, #ccc 2px, #fff 2px, #fff 4px)';
-            swatch.title = `Color ${i + 1}: Transparent`;
-          }
-
-          swatch.addEventListener('click', () => {
-            activeSwatchIndex = i;
-            const startHex = a === 0 ? '#ffffff' : hex;
-            const rgb = hexToRgb(startHex);
-            if (rgb) {
-              const hsv = rgbToHsv(rgb.r, rgb.g, rgb.b);
-              pickerHue = hsv.h;
-              pickerSat = hsv.s;
-              pickerVal = hsv.v;
-
-              if (pickerHueSlider) pickerHueSlider.value = pickerHue;
-              updatePickerColor();
-              if (pickerPanel) pickerPanel.classList.remove('hidden');
-            }
-          });
-
-          paletteGrid.appendChild(swatch);
-        }
-
-        paletteGridContainer.classList.remove('hidden');
-        state.customPaletteEdited = false;
+        loadPaletteFromImage(img, false);
       };
       img.src = URL.createObjectURL(paletteBlob);
 
@@ -636,13 +640,26 @@ async function startConversion() {
   const dither = ditherSelect.value;
   const ditherText = ditherSelect.options[ditherSelect.selectedIndex].text;
 
+  const playbackSelect = document.getElementById('playback');
+  const playback = playbackSelect.value;
+  const playbackText = playbackSelect.options[playbackSelect.selectedIndex].text;
+
   // Generate unique conversion ID
   const conversionId = Math.random().toString(36).substring(2, 9) + Date.now().toString(36);
 
+  const settingsData = { scale: scaleSlider.value, fps, colors, trans, dither, ditherText, playback, playbackText, paletteEdited: state.customPaletteEdited, paletteDataUrl: null };
+  if (state.customPaletteEdited) {
+    settingsData.paletteDataUrl = paletteCanvas.toDataURL('image/png');
+  }
+
   // Instantiation of polaroid card
-  const card = createResultCard(conversionId, { width, height, fps, colors, trans, ditherText });
+  const card = createResultCard(conversionId, { width, height, ...settingsData });
+  card.el.settingsData = settingsData;
   emptyState.classList.add('hidden');
   resultsFeed.insertBefore(card.el, resultsFeed.firstChild);
+
+  // Auto-scroll to results feed
+  document.querySelector('.workspace-results').scrollIntoView({ behavior: 'smooth', block: 'start' });
 
   // Cancellation binder
   let isCancelled = false;
@@ -706,17 +723,38 @@ async function startConversion() {
     });
 
     // 3. Prepare filters
-    const scaleFilter = `scale=${width}:${height}:flags=lanczos`;
+    let filterSource = `fps=${fps},scale=${width}:${height}:flags=lanczos`;
+    if (playback === 'pingpong') {
+      filterSource = `[0:v]split[v1][v2];[v2]reverse[v2r];[v1][v2r]concat=n=2:v=1[merged];[merged]fps=${fps},scale=${width}:${height}:flags=lanczos`;
+    }
+
     const palettegenOpts = `max_colors=${colors}` + (trans === 'yes' ? ':reserve_transparent=1' : '');
     const paletteuseOpts = (trans === 'yes' ? 'alpha_threshold=128:' : '') + `dither=${dither}`;
 
     // 4. Exec Pass 1: Palette Analysis (Only if not using custom palette!)
     if (!state.customPaletteEdited) {
+      const pass1FilterArgs = playback === 'pingpong' 
+        ? ['-filter_complex', `${filterSource},palettegen=${palettegenOpts}`]
+        : ['-vf', `${filterSource},palettegen=${palettegenOpts}`];
+
       await state.ffmpeg.exec([
         '-i', inputName,
-        '-vf', `fps=${fps},${scaleFilter},palettegen=${palettegenOpts}`,
+        ...pass1FilterArgs,
         '-y', paletteName
       ]);
+
+      // Capture the generated palette for the "Copy Settings" feature
+      try {
+        const palData = await state.ffmpeg.readFile(paletteName);
+        const palBlob = new Blob([palData.buffer], { type: 'image/png' });
+        const reader = new FileReader();
+        reader.onload = () => {
+          card.el.settingsData.paletteDataUrl = reader.result;
+        };
+        reader.readAsDataURL(palBlob);
+      } catch (e) {
+        console.error('Could not capture auto-generated palette for copy settings:', e);
+      }
     }
 
     if (isCancelled) {
@@ -726,10 +764,13 @@ async function startConversion() {
     }
 
     // 5. Exec Pass 2: Pixel Dithering & GIF compilation
+    const loopArg = (playback === 'once') ? '-1' : '0';
+
     await state.ffmpeg.exec([
       '-i', inputName,
       '-i', paletteName,
-      '-filter_complex', `fps=${fps},${scaleFilter}[x];[x][1:v]paletteuse=${paletteuseOpts}`,
+      '-filter_complex', `${filterSource}[x];[x][1:v]paletteuse=${paletteuseOpts}`,
+      '-loop', loopArg,
       '-y', gifName
     ]);
 
@@ -814,7 +855,8 @@ function createResultCard(id, settings) {
     `${settings.fps} FPS`,
     `${settings.colors} Colors`,
     settings.ditherText,
-    settings.trans === 'yes' ? 'Alpha' : 'No Alpha'
+    settings.trans === 'yes' ? 'Alpha' : 'No Alpha',
+    settings.playbackText || 'Loop'
   ];
   
   if (settings.width && settings.height) {
@@ -827,6 +869,46 @@ function createResultCard(id, settings) {
     span.textContent = text;
     badgesContainer.appendChild(span);
   });
+
+  const copyBtn = el.querySelector('.btn-copy-settings');
+  if (copyBtn) {
+    copyBtn.addEventListener('click', () => {
+      const sData = el.settingsData;
+      if (!sData) return;
+      
+      fpsSlider.value = sData.fps;
+      fpsSlider.dispatchEvent(new Event('input'));
+      colorsSlider.value = sData.colors;
+      colorsSlider.dispatchEvent(new Event('input'));
+      scaleSlider.value = sData.scale;
+      scaleSlider.dispatchEvent(new Event('input'));
+      
+      transparencyToggle.checked = (sData.trans === 'yes');
+      transparencyToggle.dispatchEvent(new Event('change'));
+      
+      document.getElementById('dither').value = sData.dither;
+      if (sData.playback) {
+        document.getElementById('playback').value = sData.playback;
+      }
+      
+      if (sData.paletteDataUrl) {
+        const img = new Image();
+        img.onload = () => {
+          loadPaletteFromImage(img, true);
+        };
+        img.src = sData.paletteDataUrl;
+      } else {
+        state.customPaletteEdited = false;
+        if (paletteGridContainer) paletteGridContainer.classList.add('hidden');
+      }
+
+      // Auto-scroll to settings panel (skipping palette editor)
+      const settingsSection = document.querySelector('.workspace-sidebar');
+      if (settingsSection) {
+        settingsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    });
+  }
   
   return {
     el,
@@ -840,6 +922,7 @@ function createResultCard(id, settings) {
     sizeEl: el.querySelector('.result-size'),
     dimsEl: el.querySelector('.result-dims'),
     downloadBtn: el.querySelector('.btn-download'),
+    copyBtn,
     errorContent: el.querySelector('.error-content')
   };
 }
@@ -853,31 +936,30 @@ function checkEmptyState() {
 
 // --- Close Session ---
 closeSessionBtn.addEventListener('click', () => {
-  if (confirm('Are you sure you want to exit? All converted GIFs in this session will be cleared.')) {
-    // Reset states
-    state.file = null;
-    state.filename = null;
-    state.sizeBytes = 0;
-    state.durationSeconds = 0;
-    state.width = 0;
-    state.height = 0;
-    state.customPaletteEdited = false;
-    state.customPaletteColors = [];
+  // Reset states for the new video
+  state.file = null;
+  state.filename = null;
+  state.sizeBytes = 0;
+  state.durationSeconds = 0;
+  state.width = 0;
+  state.height = 0;
+  
+  // Explicitly reset the palette for the new video
+  state.customPaletteEdited = false;
+  state.customPaletteColors = [];
 
-    // Reset UI
-    if (paletteGrid) paletteGrid.innerHTML = '';
-    if (paletteGridContainer) paletteGridContainer.classList.add('hidden');
-    if (pickerPanel) pickerPanel.classList.add('hidden');
+  // Reset Palette UI
+  if (paletteGrid) paletteGrid.innerHTML = '';
+  if (paletteGridContainer) paletteGridContainer.classList.add('hidden');
+  if (pickerPanel) pickerPanel.classList.add('hidden');
 
-    // Switch views
-    workspaceSection.classList.add('hidden');
-    uploadSection.classList.remove('hidden');
-    
-    // Purge result cards
-    const cards = resultsFeed.querySelectorAll('.result-card');
-    cards.forEach(c => c.remove());
-    emptyState.classList.remove('hidden');
-  }
+  // Switch views back to upload
+  workspaceSection.classList.add('hidden');
+  uploadSection.classList.remove('hidden');
+  
+  // Note: We intentionally do NOT purge result cards here,
+  // allowing the user to compare GIFs from different source videos side-by-side.
+  // The control sliders (FPS, Colors, etc) also retain their current values naturally.
 });
 
 // --- Full-Size GIF Modal Logic ---
