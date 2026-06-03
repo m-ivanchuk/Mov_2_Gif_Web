@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Kawaii Web Converter — Convert video to GIF entirely in your browser using local WebAssembly. 100% private, free, and serverless!">
+  <title>Kawaii Web Converter ✿ Offline Video to GIF</title>
+  
+  <!-- coi-serviceworker enables SharedArrayBuffer on GitHub Pages / static hosts -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/coi-serviceworker/0.1.7/coi-serviceworker.min.js"></script>
+  
+  <!-- FFmpeg.wasm and Utils UMD scripts loaded locally -->
+  <script src="ffmpeg/ffmpeg.min.js"></script>
+  <script src="ffmpeg/ffmpeg-util.js"></script>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@300..700&family=Nunito:wght@300..900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <!-- Floating decorative stars in background -->
+  <div class="floating-bg-element star-1" aria-hidden="true">★</div>
+  <div class="floating-bg-element star-2" aria-hidden="true">✦</div>
+  <div class="floating-bg-element star-3" aria-hidden="true">✿</div>
+  <div class="floating-bg-element star-4" aria-hidden="true">✦</div>
+
+  <div class="app">
+    <header class="app-header">
+      <div class="logo-area">
+        <span class="logo-icon" aria-hidden="true">
+          <!-- Smiling Kawaii Cloud Logo -->
+          <svg class="kawaii-cloud" width="68" height="68" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M18 44C12.5 44 8 39.5 8 34C8 28.8 12 24.5 17.2 24C18.7 16 25.6 10 34 10C43.2 10 50.8 16.9 51.9 25.8C56.5 27.2 59.8 31.5 59.8 36.5C59.8 42.9 54.6 48 48.3 48L18 48" stroke="#2f2d29" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" fill="#ffffff" />
+            <circle cx="27" cy="31" r="2.5" fill="#2f2d29" />
+            <circle cx="39" cy="31" r="2.5" fill="#2f2d29" />
+            <path d="M31 34.5C32 35.5 34 35.5 35 34.5" stroke="#2f2d29" stroke-width="2.5" stroke-linecap="round" />
+            <circle cx="22" cy="33.5" r="2.5" fill="#ffdbe0" />
+            <circle cx="44" cy="33.5" r="2.5" fill="#ffdbe0" />
+          </svg>
+        </span>
+      </div>
+      <h1 class="app-title">Kawaii Web Converter</h1>
+      <p class="app-subtitle">Offline Video to GIF with WebAssembly • (^_−)☆</p>
+      
+      <!-- Cute Client-Side indicator -->
+      <div class="client-side-badge" title="This app converts video locally in your browser. Your files never leave your device!">
+        <span class="badge-icon">🔒</span>
+        <span>100% Local & Private</span>
+      </div>
+    </header>
+
+    <!-- Wasm loading banner (active on start) -->
+    <div id="wasm-loading-banner" class="wasm-loading-banner card">
+      <div class="wasm-loading-spinner-container">
+        <svg class="wiggling-paws" width="60" height="40" viewBox="0 0 60 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <circle cx="15" cy="20" r="10" fill="#2f2d29" />
+          <circle cx="20" cy="10" r="4" fill="#ffdbe0" />
+          <circle cx="10" cy="12" r="3" fill="#ffdbe0" />
+          <circle cx="45" cy="20" r="10" fill="#2f2d29" />
+          <circle cx="40" cy="10" r="4" fill="#ffdbe0" />
+          <circle cx="50" cy="12" r="3" fill="#ffdbe0" />
+        </svg>
+      </div>
+      <p class="wasm-loading-title">Initializing WebAssembly Engine...</p>
+      <p class="wasm-loading-subtitle">Downloading local converter core (~30MB, loaded only once!)</p>
+    </div>
+
+    <main id="app-content" class="app-main hidden">
+      <!-- Step 1: Upload -->
+      <section id="upload-section" class="card visible">
+        <div id="drop-zone" class="drop-zone" role="button" tabindex="0" aria-label="Upload video file">
+          <!-- Sparkles & dots decorating the drop zone -->
+          <div class="sparkle sparkle-top-left">✦</div>
+          <div class="sparkle sparkle-top-right">✧</div>
+          <div class="sparkle sparkle-bottom-left">✧</div>
+          <div class="sparkle sparkle-bottom-right">✦</div>
+          <div class="dot-decor dot-1"></div>
+          <div class="dot-decor dot-2"></div>
+          <div class="dot-decor dot-3"></div>
+
+          <div class="drop-zone-icon-container">
+            <!-- Cute Marshmallow/Cat SVG -->
+            <svg class="kawaii-marshmallow" width="130" height="130" viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <rect x="35" y="35" width="50" height="55" rx="16" fill="#ffffff" stroke="#2f2d29" stroke-width="3.5" />
+              <!-- Ears -->
+              <path d="M38 36 L24 21 C31 20 40 27 45 35 Z" fill="#ffffff" stroke="#2f2d29" stroke-width="3.5" stroke-linejoin="round" />
+              <path d="M36 34 L28 25 C32 24 37 28 39 34 Z" fill="#ffdbe0" />
+              <path d="M82 36 L96 21 C89 20 80 27 75 35 Z" fill="#ffffff" stroke="#2f2d29" stroke-width="3.5" stroke-linejoin="round" />
+              <path d="M84 34 L92 25 C88 24 83 28 81 34 Z" fill="#ffdbe0" />
+              <!-- Green Bow -->
+              <path d="M84 38C82 35 76 35 74 38C73 40 76 45 80 43C84 45 87 40 86 38Z" fill="#cbeee4" stroke="#2f2d29" stroke-width="2" />
+              <circle cx="80" cy="39" r="3" fill="#2f2d29" />
+              <!-- Whiskers -->
+              <path d="M38 59L22 57" stroke="#2f2d29" stroke-width="2.5" stroke-linecap="round" />
+              <path d="M36 63L20 63" stroke="#2f2d29" stroke-width="2.5" stroke-linecap="round" />
+              <path d="M38 67L24 70" stroke="#2f2d29" stroke-width="2.5" stroke-linecap="round" />
+              <path d="M82 59L98 57" stroke="#2f2d29" stroke-width="2.5" stroke-linecap="round" />
+              <path d="M84 63L100 63" stroke="#2f2d29" stroke-width="2.5" stroke-linecap="round" />
+              <path d="M82 67L96 70" stroke="#2f2d29" stroke-width="2.5" stroke-linecap="round" />
+              <!-- Face -->
+              <path d="M48 57C50 55 52 55 54 57" stroke="#2f2d29" stroke-width="2.5" stroke-linecap="round" />
+              <path d="M66 57C68 55 70 55 72 57" stroke="#2f2d29" stroke-width="2.5" stroke-linecap="round" />
+              <path d="M58 64C59 65.5 61 65.5 62 64C63 65.5 65 65.5 66 64" stroke="#2f2d29" stroke-width="2" stroke-linecap="round" />
+              <ellipse cx="44" cy="62" rx="4" ry="3" fill="#ffdbe0" />
+              <ellipse cx="76" cy="62" rx="4" ry="3" fill="#ffdbe0" />
+              <!-- Little Hands/Feet -->
+              <path d="M34 68C31 68 31 71 34 71" stroke="#2f2d29" stroke-width="3.5" stroke-linecap="round" fill="#ffffff" />
+              <path d="M86 68C89 68 89 71 86 71" stroke="#2f2d29" stroke-width="3.5" stroke-linecap="round" fill="#ffffff" />
+              <path d="M48 90C48 94 44 96 41 94C39 92 42 90 44 90" stroke="#2f2d29" stroke-width="3" stroke-linecap="round" fill="#ffffff" />
+              <path d="M72 90C72 94 76 96 79 94C81 92 78 90 76 90" stroke="#2f2d29" stroke-width="3" stroke-linecap="round" fill="#ffffff" />
+            </svg>
+          </div>
+          
+          <p class="drop-zone-title">Drop your video here</p>
+          <p class="drop-zone-subtitle">or click to browse</p>
+          
+          <div class="format-badges">
+            <span class="format-badge format-mov">MOV</span>
+            <span class="format-badge format-mp4">MP4</span>
+            <span class="format-badge format-webm">WEBM</span>
+            <span class="format-badge format-avi">AVI</span>
+          </div>
+          
+          <p class="drop-zone-hint-text">Sliders appear on file hover</p>
+          <input type="file" id="file-input" accept=".mov,.mp4,.webm,.avi,.mkv" hidden>
+        </div>
+      </section>
+
+      <!-- Step 2: Workspace -->
+      <section id="workspace-section" class="workspace hidden">
+        <div class="workspace-controls">
+          <!-- Standalone Side Palette Editor Card -->
+          <div id="palette-editor-card" class="card palette-card-standalone">
+            <h3 class="card-title">✿ Palette Editor ✿</h3>
+            <button type="button" id="generate-palette-btn" class="btn-secondary-cute full-width">
+              Load & Edit Colors
+            </button>
+            <div id="palette-grid-container" class="palette-grid-container hidden">
+              <div id="palette-grid" class="palette-grid"></div>
+              <p class="palette-hint-text">Click any color to edit, changes apply to next renders</p>
+            </div>
+            <!-- Floating Color Picker Panel -->
+            <div id="palette-floating-picker" class="palette-floating-picker hidden">
+              <div class="picker-header">
+                <span class="picker-title">✿ Pick Color ✿</span>
+                <button type="button" id="picker-close-btn" class="btn-change-small">✕</button>
+              </div>
+              <canvas id="picker-sv-canvas" width="188" height="120"></canvas>
+              <input type="range" id="picker-hue-slider" min="0" max="360" value="0" class="slider slider-pink" style="height: 12px; margin-top: 4px;">
+              <div class="picker-footer">
+                <div id="picker-preview" class="picker-preview"></div>
+                <input type="text" id="picker-hex-input" class="select picker-hex-input" maxlength="7">
+                <button type="button" id="picker-apply-btn" class="btn-secondary-cute picker-apply-btn">Apply</button>
+              </div>
+            </div>
+            <canvas id="palette-canvas" style="display:none"></canvas>
+          </div>
+
+          <!-- Left Sidebar: Settings -->
+          <aside class="workspace-sidebar card">
+            <!-- File info styled like a cute ticket -->
+            <div class="file-info">
+              <div class="file-info-details">
+                <div class="file-icon">
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="2" y="2" width="20" height="20" rx="5" fill="#fef0be" stroke="#2f2d29" stroke-width="2.5"></rect>
+                    <circle cx="12" cy="12" r="3" fill="#ffffff" stroke="#2f2d29" stroke-width="2.5"></circle>
+                  </svg>
+                </div>
+                <div class="file-meta">
+                  <span id="file-name" class="file-name">video.mov</span>
+                  <span class="file-stats">
+                    <span id="file-size">—</span>
+                    <span class="dot-sep">•</span>
+                    <span id="file-duration">—</span>
+                    <span class="dot-sep">•</span>
+                    <span id="file-dimensions">—</span>
+                  </span>
+                </div>
+              </div>
+              <button id="close-session-btn" class="btn-change" aria-label="Close session" title="Clear session">
+                ✕
+              </button>
+            </div>
+
+            <h2 class="card-title">✿ Conversion Settings ✿</h2>
+            
+            <div class="settings-grid">
+              <!-- Symmetrical FPS Slider -->
+              <div class="kawaii-slider-group full-width">
+                <div class="slider-header">
+                  <label for="fps" class="slider-label">FPS</label>
+                  <div class="stepper-control">
+                    <button type="button" class="btn-step" data-target="fps" data-dir="-1">−</button>
+                    <span class="value-badge badge-mint" id="fps-value">12</span>
+                    <button type="button" class="btn-step" data-target="fps" data-dir="1">+</button>
+                  </div>
+                </div>
+                <div class="slider-container">
+                  <input type="range" id="fps" min="1" max="60" value="12" class="slider slider-mint">
+                </div>
+                <div class="slider-footer">
+                  <span>1</span>
+                  <span>60</span>
+                </div>
+              </div>
+
+              <!-- Symmetrical Scale Slider -->
+              <div class="kawaii-slider-group full-width">
+                <div class="slider-header">
+                  <label for="scale" class="slider-label">Scale</label>
+                  <div class="stepper-control">
+                    <button type="button" class="btn-step" data-target="scale" data-dir="-1">−</button>
+                    <span class="value-badge badge-pink" id="scale-value">100%</span>
+                    <button type="button" class="btn-step" data-target="scale" data-dir="1">+</button>
+                  </div>
+                </div>
+                <div class="slider-container">
+                  <input type="range" id="scale" min="10" max="100" step="5" value="100" class="slider slider-pink">
+                </div>
+                <div class="slider-footer">
+                  <span>10%</span>
+                  <span>100%</span>
+                </div>
+                <span class="hint" id="scale-hint">Output size: —</span>
+              </div>
+
+              <!-- Symmetrical Max Colors Slider -->
+              <div class="kawaii-slider-group full-width">
+                <div class="slider-header">
+                  <label for="colors" class="slider-label">Colors</label>
+                  <div class="stepper-control">
+                    <button type="button" class="btn-step" data-target="colors" data-dir="-1">−</button>
+                    <span class="value-badge badge-yellow" id="colors-value">64</span>
+                    <button type="button" class="btn-step" data-target="colors" data-dir="1">+</button>
+                  </div>
+                </div>
+                <div class="slider-container">
+                  <input type="range" id="colors" min="4" max="256" value="64" class="slider slider-yellow">
+                </div>
+                <div class="slider-footer">
+                  <span>4</span>
+                  <span>256</span>
+                </div>
+              </div>
+
+              <!-- Transparency & Dither (Kawaii Pill Box) -->
+              <div class="kawaii-pill-box full-width">
+                <div class="setting-group">
+                  <label class="kawaii-label">Transparency</label>
+                  <label class="toggle">
+                    <input type="checkbox" id="transparency" checked>
+                    <span class="toggle-slider"></span>
+                    <span class="toggle-label" id="transparency-label">On</span>
+                  </label>
+                </div>
+
+                <div class="setting-group">
+                  <label for="dither" class="kawaii-label">Dithering</label>
+                  <select id="dither" class="select">
+                    <option value="floyd_steinberg" selected>Floyd-Steinberg</option>
+                    <option value="bayer">Bayer Matrix</option>
+                    <option value="sierra2_4a">Sierra Lite</option>
+                    <option value="heckbert">Heckbert Color</option>
+                    <option value="none">No Dither</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            <button id="convert-btn" class="btn-convert">
+              <span class="btn-icon" aria-hidden="true">✨</span>
+              <span>Convert to GIF</span>
+            </button>
+          </aside>
+        </div>
+
+        <!-- Right Main: Results Feed -->
+        <div class="workspace-results">
+          <div class="results-feed-header">
+            <h3 class="results-feed-title">✿ Compare Renders ✿</h3>
+            <select id="sort-select" class="select results-feed-sort-select">
+              <option value="newest">Sort by Newest</option>
+              <option value="size">Sort by Size</option>
+              <option value="fps">Sort by FPS</option>
+              <option value="colors">Sort by Colors</option>
+              <option value="dither">Sort by Dithering</option>
+            </select>
+          </div>
+
+          <div id="results-feed" class="results-feed">
+            <div id="empty-state" class="empty-state">
+              <span class="empty-icon">🎨</span>
+              <p>Adjust settings and press "Convert to GIF" to compare renders!</p>
+            </div>
+            <!-- Result cards will be prepended here -->
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="app-footer">
+      <a href="#" class="footer-link">About</a>
+      <span class="footer-dot">•</span>
+      <a href="#" class="footer-link">Terms</a>
+      <span class="footer-dot">•</span>
+      <a href="#" class="footer-link">Privacy</a>
+    </footer>
+  </div>
+
+  <!-- Template for a result card (styled as a polaroid) -->
+  <template id="result-card-template">
+    <div class="card result-card visible">
+      <div class="result-header">
+        <div class="result-badges">
+          <!-- Filled by JS -->
+        </div>
+        <button class="btn-delete" title="Delete this version">✕</button>
+      </div>
+
+      <!-- Cute loader progress state -->
+      <div class="progress-container">
+        <!-- Cute progress character that wiggles -->
+        <div class="cute-progress-character-container">
+          <svg class="wiggling-paws" width="60" height="40" viewBox="0 0 60 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="15" cy="20" r="10" fill="#2f2d29" />
+            <circle cx="20" cy="10" r="4" fill="#ffdbe0" />
+            <circle cx="10" cy="12" r="3" fill="#ffdbe0" />
+            
+            <circle cx="45" cy="20" r="10" fill="#2f2d29" />
+            <circle cx="40" cy="10" r="4" fill="#ffdbe0" />
+            <circle cx="50" cy="12" r="3" fill="#ffdbe0" />
+          </svg>
+        </div>
+        <div class="progress-bar">
+          <div class="progress-fill"></div>
+        </div>
+        <div class="progress-info">
+          <span class="progress-stage">Preparing magic...</span>
+          <span class="progress-percent">0%</span>
+        </div>
+      </div>
+
+      <!-- Result state (Polaroid image frame) -->
+      <div class="result-content hidden">
+        <div class="result-preview">
+          <img class="result-gif" alt="Converted GIF preview">
+        </div>
+        <div class="result-stats">
+          <div class="stat">
+            <span class="stat-label">File Size</span>
+            <span class="stat-value result-size">—</span>
+          </div>
+          <div class="stat">
+            <span class="stat-label">Resolution</span>
+            <span class="stat-value result-dims">—</span>
+          </div>
+        </div>
+        <div class="result-actions">
+          <a class="btn-download" download>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 15v4c0 1-1 2-2 2H5c-1 0-2-1-2-2v-4"></path>
+              <polyline points="7 10 12 15 17 10"></polyline>
+              <line x1="12" y1="15" x2="12" y2="3"></line>
+            </svg>
+            <span>Download GIF</span>
+          </a>
+        </div>
+      </div>
+
+      <!-- Error state -->
+      <div class="error-content hidden">
+        <div class="error-emoji">ಥ_ಥ</div>
+        <p class="error-text">Conversion failed</p>
+      </div>
+    </div>
+  </template>
+
+  <!-- Polaroid-style Full-Size GIF Modal -->
+  <div id="gif-modal" class="gif-modal hidden" aria-hidden="true" role="dialog">
+    <button class="gif-modal-close" aria-label="Close modal">✕</button>
+    <div class="gif-modal-content">
+      <div class="gif-modal-preview">
+        <img id="gif-modal-img" class="gif-modal-img" alt="Full size GIF preview">
+      </div>
+      <div class="gif-modal-caption" id="gif-modal-caption">GIF Settings</div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
