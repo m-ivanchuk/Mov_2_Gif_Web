@@ -549,74 +549,57 @@ async function handleFile(file) {
   state.sizeBytes = file.size;
 
   try {
-    // Robust Client-Side Prober: Load video in DOM-attached hidden tag to force layout decoding
-    const video = document.createElement('video');
-    video.style.position = 'absolute';
-    video.style.width = '0px';
-    video.style.height = '0px';
-    video.style.opacity = '0';
-    video.preload = 'auto';
-    document.body.appendChild(video);
-    
-    video.src = URL.createObjectURL(file);
-    
-    const readDimensions = () => {
-      state.durationSeconds = video.duration;
-      state.width = video.videoWidth || 640;   // Fallback to sensible default if still 0
-      state.height = video.videoHeight || 360; // Fallback to sensible default if still 0
-      
-      // Update UI elements
-      fileNameEl.textContent = state.filename;
-      fileSizeEl.textContent = formatBytes(state.sizeBytes);
-      fileDurationEl.textContent = formatTime(state.durationSeconds);
-      fileDimsEl.textContent = `${state.width}x${state.height}`;
-      
-      // Transition views
-      uploadSection.classList.add('hidden');
-      workspaceSection.classList.remove('hidden');
-      
-      dropZone.classList.remove('uploading');
-      updateScaleHint();
-      fileInput.value = '';
-      
-      // Clean up DOM
-      if (document.body.contains(video)) {
-        document.body.removeChild(video);
+    // Gather geometry size from the new source file directly using FFmpeg, 
+    // avoiding browser DOM / video tag memory caching issues.
+    const { fetchFile } = FFmpegUtil;
+    const probeName = 'probe_' + Date.now() + '.' + state.filename.split('.').pop();
+    await state.ffmpeg.writeFile(probeName, await fetchFile(file));
+
+    let probedW = 0;
+    let probedH = 0;
+    let probedDuration = 0;
+
+    const probeLogHandler = ({ message }) => {
+      const dimMatch = message.match(/Video:.*?\s(\d{2,5})x(\d{2,5})\b/);
+      if (dimMatch && !probedW) {
+        probedW = parseInt(dimMatch[1], 10);
+        probedH = parseInt(dimMatch[2], 10);
+      }
+      const durMatch = message.match(/Duration:\s*(\d{2}):(\d{2}):(\d{2}\.\d+)/);
+      if (durMatch && !probedDuration) {
+        const h = parseInt(durMatch[1], 10);
+        const m = parseInt(durMatch[2], 10);
+        const s = parseFloat(durMatch[3]);
+        probedDuration = h * 3600 + m * 60 + s;
       }
     };
 
-    video.onloadedmetadata = () => {
-      // If dimensions are populated immediately
-      if (video.videoWidth > 0) {
-        readDimensions();
-      } else {
-        // Otherwise wait until the first frame loads
-        video.onloadeddata = readDimensions;
-      }
-    };
+    state.ffmpeg.on('log', probeLogHandler);
+    await state.ffmpeg.exec(['-i', probeName]);
+    state.ffmpeg.off('log', probeLogHandler);
 
-    video.onerror = () => {
-      // Fallback if browser absolutely cannot load video natively
-      state.durationSeconds = 5;
-      state.width = 640;
-      state.height = 360;
-      
-      fileNameEl.textContent = state.filename;
-      fileSizeEl.textContent = formatBytes(state.sizeBytes);
-      fileDurationEl.textContent = formatTime(state.durationSeconds);
-      fileDimsEl.textContent = `640x360 (unsupported preview)`;
-      
-      uploadSection.classList.add('hidden');
-      workspaceSection.classList.remove('hidden');
-      
-      dropZone.classList.remove('uploading');
-      updateScaleHint();
-      fileInput.value = '';
-      
-      if (document.body.contains(video)) {
-        document.body.removeChild(video);
-      }
-    };
+    try {
+      await state.ffmpeg.deleteFile(probeName);
+    } catch (e) {}
+
+    state.durationSeconds = probedDuration || 5;
+    state.width = probedW || 640;
+    state.height = probedH || 360;
+
+    // Update UI elements
+    fileNameEl.textContent = state.filename;
+    fileSizeEl.textContent = formatBytes(state.sizeBytes);
+    fileDurationEl.textContent = formatTime(state.durationSeconds);
+    fileDimsEl.textContent = `${state.width}x${state.height}`;
+    
+    // Transition views
+    uploadSection.classList.add('hidden');
+    workspaceSection.classList.remove('hidden');
+    
+    dropZone.classList.remove('uploading');
+    updateScaleHint();
+    fileInput.value = '';
+    
   } catch (err) {
     alert('Failed to read video details: ' + err.message);
     dropZone.classList.remove('uploading');
