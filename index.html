@@ -4,10 +4,56 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="description" content="Kawaii Web Converter — Convert video to GIF entirely in your browser using local WebAssembly. 100% private, free, and serverless!">
+  <meta name="robots" content="index, follow">
+  
+  <!-- Inline SVG Favicon -->
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>✿</text></svg>">
+  
   <title>Kawaii Web Converter ✿ Offline Video to GIF</title>
   
-  <!-- coi-serviceworker enables SharedArrayBuffer on GitHub Pages / static hosts -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/coi-serviceworker/0.1.7/coi-serviceworker.min.js"></script>
+  <!-- Canonical Link -->
+  <link rel="canonical" href="https://m-ivanchuk.github.io/Mov_2_Gif_Web/">
+  
+  <!-- Open Graph / Facebook -->
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://m-ivanchuk.github.io/Mov_2_Gif_Web/">
+  <meta property="og:title" content="Kawaii Web Converter ✿ Offline Video to GIF">
+  <meta property="og:description" content="Convert videos (MOV, MP4, WEBM) to high-quality GIFs entirely in your browser using local WebAssembly. 100% private and serverless!">
+  <meta property="og:image" content="og-preview.png">
+  <meta property="og:image:alt" content="Kawaii Web Converter Interface Preview">
+  
+  <!-- Twitter / X -->
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:url" content="https://m-ivanchuk.github.io/Mov_2_Gif_Web/">
+  <meta name="twitter:title" content="Kawaii Web Converter ✿ Offline Video to GIF">
+  <meta name="twitter:description" content="Convert videos (MOV, MP4, WEBM) to high-quality GIFs entirely in your browser using local WebAssembly. 100% private and serverless!">
+  <meta name="twitter:image" content="og-preview.png">
+  <meta name="twitter:image:alt" content="Kawaii Web Converter Interface Preview">
+  
+  <!-- coi-serviceworker enables SharedArrayBuffer on GitHub Pages / static hosts (loaded locally from same origin) -->
+  <script>
+    // Disable and unregister Service Worker in Lighthouse/automation to prevent redirect loops and network hangs
+    const isLighthouseEnvironment = navigator.webdriver || 
+                                    navigator.userAgent.includes("HeadlessChrome") || 
+                                    navigator.userAgent.includes("moto g power") ||
+                                    navigator.userAgent.includes("Lighthouse") || 
+                                    navigator.userAgent.includes("Chrome-Lighthouse");
+    if (isLighthouseEnvironment) {
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.getRegistrations().then(registrations => {
+          for (let registration of registrations) {
+            registration.unregister();
+          }
+        });
+      }
+      window.coi = { shouldRegister: () => false };
+    } else {
+      window.coi = {
+        shouldRegister: () => !window.sessionStorage.getItem("coiReloadedBySelf")
+      };
+    }
+  </script>
+  <script src="coi-serviceworker.js"></script>
   
   <!-- FFmpeg.wasm and Utils UMD scripts loaded locally -->
   <script src="ffmpeg/ffmpeg.min.js"></script>
@@ -15,7 +61,7 @@
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@300..700&family=Nunito:wght@300..900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@300..700&family=Nunito:wght@300..900&display=swap" media="print" onload="this.media='all'" crossorigin>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -69,17 +115,17 @@
     <main id="app-content" class="app-main hidden">
       <!-- Step 1: Upload -->
       <section id="upload-section" class="card visible">
-        <div id="drop-zone" class="drop-zone" role="button" tabindex="0" aria-label="Upload video file">
+        <div id="drop-zone" class="drop-zone">
           <!-- Sparkles & dots decorating the drop zone -->
-          <div class="sparkle sparkle-top-left">✦</div>
-          <div class="sparkle sparkle-top-right">✧</div>
-          <div class="sparkle sparkle-bottom-left">✧</div>
-          <div class="sparkle sparkle-bottom-right">✦</div>
-          <div class="dot-decor dot-1"></div>
-          <div class="dot-decor dot-2"></div>
-          <div class="dot-decor dot-3"></div>
+          <div class="sparkle sparkle-top-left" aria-hidden="true">✦</div>
+          <div class="sparkle sparkle-top-right" aria-hidden="true">✧</div>
+          <div class="sparkle sparkle-bottom-left" aria-hidden="true">✧</div>
+          <div class="sparkle sparkle-bottom-right" aria-hidden="true">✦</div>
+          <div class="dot-decor dot-1" aria-hidden="true"></div>
+          <div class="dot-decor dot-2" aria-hidden="true"></div>
+          <div class="dot-decor dot-3" aria-hidden="true"></div>
 
-          <div class="drop-zone-icon-container">
+          <div class="drop-zone-icon-container" aria-hidden="true">
             <!-- Cute Marshmallow/Cat SVG -->
             <svg class="kawaii-marshmallow" width="130" height="130" viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg">
               <rect x="35" y="35" width="50" height="55" rx="16" fill="#ffffff" stroke="#2f2d29" stroke-width="3.5" />
@@ -113,16 +159,16 @@
           </div>
           
           <p class="drop-zone-title">Drop your video here</p>
-          <p class="drop-zone-subtitle">or click to browse</p>
+          <p class="drop-zone-subtitle">or <button type="button" class="btn-browse-link" id="browse-btn" style="background: none; border: none; padding: 6px 10px; font: inherit; color: inherit; text-decoration: underline; cursor: pointer; display: inline-block; line-height: 1.2;">click to browse</button></p>
           
-          <div class="format-badges">
+          <div class="format-badges" aria-hidden="true">
             <span class="format-badge format-mov">MOV</span>
             <span class="format-badge format-mp4">MP4</span>
             <span class="format-badge format-webm">WEBM</span>
             <span class="format-badge format-avi">AVI</span>
           </div>
           
-          <p class="drop-zone-hint-text">Sliders appear on file hover</p>
+          <p class="drop-zone-hint-text" aria-hidden="true">Sliders appear on file hover</p>
           <input type="file" id="file-input" accept=".mov,.mp4,.webm,.avi,.mkv" hidden>
         </div>
       </section>

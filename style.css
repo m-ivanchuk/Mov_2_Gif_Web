@@ -24,7 +24,7 @@
   --pastel-yellow: #fef0be;
   
   --text-dark: #2f2d29;
-  --text-muted: #827e77;
+  --text-muted: #615e58;
   
   /* Borders & Shadows */
   --border-width: 2.5px;
@@ -1174,6 +1174,8 @@ body::before {
   color: var(--text-muted);
   text-decoration: none;
   transition: color var(--transition);
+  padding: 6px 12px;
+  display: inline-block;
 }
 
 .footer-link:hover {

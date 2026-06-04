@@ -28,3 +28,8 @@ Thumbs.db
 # Temporary files
 *.tmp
 *.temp
+
+# Audit reports and tools
+.site-standards-audit/
+local-website-standards-audit/
+local-website-standards-audit.zip
