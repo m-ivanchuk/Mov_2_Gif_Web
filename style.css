@@ -1173,6 +1173,10 @@ body::before {
   font-weight: 700;
   color: var(--text-muted);
   text-decoration: none;
+  background: none;
+  border: none;
+  cursor: pointer;
+  outline: none;
   transition: color var(--transition);
   padding: 6px 12px;
   display: inline-block;
@@ -1562,3 +1566,135 @@ body::before {
   padding: 6px 14px !important;
   font-size: 0.8rem !important;
 }
+
+/* ---------- Bubbly Cute Modal Dialogs (Native <dialog>) ---------- */
+dialog.cute-dialog {
+  border: none;
+  background: transparent;
+  padding: 0;
+  max-width: 550px;
+  width: 90vw;
+  max-height: 85vh;
+  position: fixed;
+  inset: 0;
+  margin: auto;
+  z-index: 1000;
+  overflow: visible;
+}
+
+/* Fallback backdrop styling using ::backdrop */
+dialog.cute-dialog::backdrop {
+  background-color: rgba(47, 45, 41, 0.65);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+.cute-dialog-content {
+  background-color: var(--bg-card);
+  border: var(--border-outline);
+  border-radius: var(--border-radius-md);
+  padding: 24px;
+  box-shadow: var(--shadow-flat-hover);
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  max-height: 85vh;
+  animation: modalScaleUp 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+}
+
+.cute-dialog-title {
+  font-family: 'Fredoka', sans-serif;
+  font-size: 1.3rem;
+  font-weight: 700;
+  color: var(--text-dark);
+  margin-bottom: 16px;
+  text-align: center;
+  border-bottom: 2px dashed var(--pastel-pink);
+  padding-bottom: 10px;
+}
+
+.cute-dialog-body {
+  font-family: 'Nunito', sans-serif;
+  font-size: 0.95rem;
+  color: var(--text-dark);
+  overflow-y: auto;
+  max-height: calc(85vh - 120px);
+  padding-right: 8px;
+}
+
+.cute-dialog-body h3 {
+  font-family: 'Fredoka', sans-serif;
+  font-size: 1.05rem;
+  font-weight: 600;
+  margin: 16px 0 6px 0;
+  color: var(--text-dark);
+}
+
+.cute-dialog-body p {
+  margin-bottom: 12px;
+  line-height: 1.5;
+}
+
+.cute-dialog-body ul {
+  margin-left: 20px;
+  margin-bottom: 12px;
+}
+
+.cute-dialog-body li {
+  margin-bottom: 6px;
+}
+
+/* Custom Scrollbar for cute-dialog-body */
+.cute-dialog-body::-webkit-scrollbar {
+  width: 8px;
+}
+
+.cute-dialog-body::-webkit-scrollbar-track {
+  background: var(--bg-cream);
+  border-radius: 4px;
+}
+
+.cute-dialog-body::-webkit-scrollbar-thumb {
+  background: var(--pastel-pink);
+  border: 2px solid var(--bg-cream);
+  border-radius: 4px;
+}
+
+.cute-dialog-body::-webkit-scrollbar-thumb:hover {
+  background: #ffb3bd;
+}
+
+/* Bubbly Cute close button */
+.cute-dialog-close {
+  position: absolute;
+  top: -12px;
+  right: -12px;
+  background-color: var(--pastel-pink);
+  border: 2px solid var(--line-dark);
+  color: var(--text-dark);
+  font-family: 'Fredoka', sans-serif;
+  font-size: 0.9rem;
+  font-weight: 700;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  cursor: pointer;
+  box-shadow: 2px 2px 0px var(--line-dark);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--transition);
+  z-index: 1010;
+}
+
+.cute-dialog-close:hover {
+  background-color: #ffb3bd;
+  transform: scale(1.1) rotate(90deg);
+  box-shadow: 3px 3px 0px var(--line-dark);
+}
+
+.cute-dialog-close:active {
+  transform: translate(2px, 2px);
+  box-shadow: 0px 0px 0px var(--line-dark);
+}
+

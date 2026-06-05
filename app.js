@@ -1061,3 +1061,36 @@ const sortSelectEl = document.getElementById('sort-select');
 if (sortSelectEl) {
   sortSelectEl.addEventListener('change', sortResultsFeed);
 }
+
+// --- Bubbly Modal Dialogs Control ---
+const setupCuteDialog = (btnId, dialogId) => {
+  const btn = document.getElementById(btnId);
+  const dialog = document.getElementById(dialogId);
+  if (!btn || !dialog) return;
+
+  btn.addEventListener('click', () => {
+    dialog.showModal();
+  });
+
+  // Fallback for browsers without native closedby support
+  if (!('closedBy' in HTMLDialogElement.prototype)) {
+    dialog.addEventListener('click', (event) => {
+      if (event.target !== dialog) return;
+      const rect = dialog.getBoundingClientRect();
+      const isDialogContent = (
+        rect.top <= event.clientY &&
+        event.clientY <= rect.top + rect.height &&
+        rect.left <= event.clientX &&
+        event.clientX <= rect.left + rect.width
+      );
+      if (!isDialogContent) {
+        dialog.close();
+      }
+    });
+  }
+};
+
+setupCuteDialog('footer-about', 'about-dialog');
+setupCuteDialog('footer-terms', 'terms-dialog');
+setupCuteDialog('footer-privacy', 'privacy-dialog');
+

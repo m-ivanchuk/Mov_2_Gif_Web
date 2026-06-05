@@ -356,11 +356,11 @@
     </main>
 
     <footer class="app-footer">
-      <a href="#" class="footer-link">About</a>
+      <button type="button" class="footer-link" id="footer-about">About</button>
       <span class="footer-dot">•</span>
-      <a href="#" class="footer-link">Terms</a>
+      <button type="button" class="footer-link" id="footer-terms">Terms</button>
       <span class="footer-dot">•</span>
-      <a href="#" class="footer-link">Privacy</a>
+      <button type="button" class="footer-link" id="footer-privacy">Privacy</button>
     </footer>
   </div>
 
@@ -450,6 +450,94 @@
       <div class="gif-modal-caption" id="gif-modal-caption">GIF Settings</div>
     </div>
   </div>
+
+  <!-- Bubbly Cute Modal Dialogs -->
+  <dialog id="about-dialog" class="cute-dialog" closedby="any" aria-labelledby="about-dialog-title">
+    <div class="cute-dialog-content">
+      <button class="cute-dialog-close" aria-label="Close dialog" onclick="document.getElementById('about-dialog').close()">✕</button>
+      <h2 id="about-dialog-title" class="cute-dialog-title">✿ About Kawaii Web Converter ✿</h2>
+      <div class="cute-dialog-body">
+        <p><strong>Kawaii Web Converter</strong> is a private, offline-first, serverless video-to-GIF converter. It allows you to convert files without uploading them anywhere, preserving your privacy and data completely.</p>
+        
+        <h3>How It Works</h3>
+        <p>This tool uses <strong>FFmpeg WebAssembly (Wasm)</strong>, a port of the world's most powerful open-source video processing suite compiled to run natively in your browser. All conversion tasks run inside your local browser sandbox, using your own device's CPU/GPU. No servers are involved!</p>
+        
+        <h3>Conversion Setting Guidelines</h3>
+        <ul>
+          <li><strong>Dithering (Palette Matching):</strong>
+            <ul>
+              <li><strong>Floyd-Steinberg</strong> (Default): Best for videos with gradients (sky, sunsets, photography). It creates the smoothest color transitions.</li>
+              <li><strong>Bayer Matrix</strong>: Gives an ordered dot pattern like retro pixel art. Very cool retro aesthetic and often results in smaller files for solid colors.</li>
+              <li><strong>Sierra Lite</strong>: A faster, lighter dither with low noise. Good balance of speed and quality.</li>
+              <li><strong>Heckbert Color</strong>: Advanced dynamic color quantization, producing a rich color space.</li>
+              <li><strong>No Dither</strong>: Best for cartoon/pixel-art styles without color gradients. It keeps files extremely small.</li>
+            </ul>
+          </li>
+          <li><strong>Colors:</strong>
+            <ul>
+              <li><strong>256 colors</strong>: Max quality, richest look, but largest file size.</li>
+              <li><strong>64-128 colors</strong>: Sweet spot for web animations and fast loading.</li>
+              <li><strong>16-32 colors</strong>: Retro/lo-fi look, ultra-light files.</li>
+            </ul>
+          </li>
+          <li><strong>FPS (Frames Per Second):</strong>
+            <ul>
+              <li>Standard GIFs use 10-15 FPS. High values like 30 or 60 FPS look smooth but make GIF file sizes massive because GIFs do not have modern video compression.</li>
+            </ul>
+          </li>
+          <li><strong>Scale:</strong>
+            <ul>
+              <li>Scaling down (e.g., 50% or 75%) is the easiest way to significantly reduce the output GIF file size.</li>
+            </ul>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </dialog>
+
+  <dialog id="terms-dialog" class="cute-dialog" closedby="any" aria-labelledby="terms-dialog-title">
+    <div class="cute-dialog-content">
+      <button class="cute-dialog-close" aria-label="Close dialog" onclick="document.getElementById('terms-dialog').close()">✕</button>
+      <h2 id="terms-dialog-title" class="cute-dialog-title">✿ Terms of Use ✿</h2>
+      <div class="cute-dialog-body">
+        <p>Welcome to <strong>Kawaii Web Converter</strong>! By using this website, you agree to these simple terms:</p>
+        
+        <h3>1. Usage is Free and Unrestricted</h3>
+        <p>This tool is 100% free, open-source, and does not require registration, subscriptions, or login credentials. There are no hidden fees or advertisements.</p>
+        
+        <h3>2. "As-Is" No-Warranty Service</h3>
+        <p>The converter is provided "as-is", without warranty of any kind, express or implied. We do not guarantee that the tool will work for every single video file, resolution, or device environment.</p>
+        
+        <h3>3. Full Local Ownership & Responsibility</h3>
+        <p>Because the conversion happens entirely on your machine, we have no access, visibility, or control over what you convert. You are fully responsible for the legality, licensing, and contents of the files you process and share.</p>
+      </div>
+    </div>
+  </dialog>
+
+  <dialog id="privacy-dialog" class="cute-dialog" closedby="any" aria-labelledby="privacy-dialog-title">
+    <div class="cute-dialog-content">
+      <button class="cute-dialog-close" aria-label="Close dialog" onclick="document.getElementById('privacy-dialog').close()">✕</button>
+      <h2 id="privacy-dialog-title" class="cute-dialog-title">✿ Privacy Policy ✿</h2>
+      <div class="cute-dialog-body">
+        <p>We respect your privacy. Here is exactly what happens when you use <strong>Kawaii Web Converter</strong>:</p>
+        
+        <h3>1. Zero Server Uploads</h3>
+        <p>Your files are <strong>never</strong> uploaded to any server. When you drop a video file, it is loaded directly into your browser's local memory sandbox. The entire conversion is executed locally by your browser using WebAssembly.</p>
+        
+        <h3>2. Security of 30MB Downloads</h3>
+        <p>When you first load the site, it downloads about 30 megabytes of static assets. These assets include the WebAssembly core files (the compiled version of the FFmpeg engine).</p>
+        <p><strong>Why this is safe:</strong></p>
+        <ul>
+          <li>These are static files loaded from GitHub Pages, served securely over HTTPS.</li>
+          <li>They run inside the browser's standard security sandbox. They cannot access your local files, network, or registry.</li>
+          <li>Once loaded, they are cached by your browser so subsequent visits load instantly and can even work fully offline!</li>
+        </ul>
+        
+        <h3>3. No Tracking or Analytics</h3>
+        <p>We do not use tracking cookies, analytics services, or marketing databases. We do not store your IP address, filenames, or conversion history. This is a clean, serverless space.</p>
+      </div>
+    </div>
+  </dialog>
 
   <script src="app.js"></script>
 </body>
