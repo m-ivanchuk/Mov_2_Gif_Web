@@ -1094,3 +1094,89 @@ setupCuteDialog('footer-about', 'about-dialog');
 setupCuteDialog('footer-terms', 'terms-dialog');
 setupCuteDialog('footer-privacy', 'privacy-dialog');
 
+// --- Mascot Dither Pets data ---
+const ditherPets = {
+  floyd_steinberg: {
+    text: "Hi, I'm Floydy! I make gradients super smooth and soft, like a cloud! (✿◠‿◠)",
+    svg: `<svg class="pet-wiggle" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <path d="M18 40C14 40 10 36 10 32C10 28 13.5 25 17 25C18 19 23 14 30 14C37 14 42 19 43 25C47 25 50 28 50 32C50 36 46 40 42 40H18Z" fill="#ffdbe0" stroke="#2f2d29" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="24" cy="29" r="2" fill="#2f2d29" />
+  <circle cx="36" cy="29" r="2" fill="#2f2d29" />
+  <circle cx="21" cy="31" r="1.5" fill="#ffb3bd" />
+  <circle cx="39" cy="31" r="1.5" fill="#ffb3bd" />
+  <path d="M28 32C29 33 31 33 32 32" stroke="#2f2d29" stroke-width="2" stroke-linecap="round" />
+</svg>`
+  },
+  bayer: {
+    text: "Beep boop! I'm Bayer-kun! I create retro pixel-dot grids like classic games! (👾_👾)",
+    svg: `<svg class="pet-jump" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect x="14" y="14" width="36" height="30" rx="6" fill="#cbeee4" stroke="#2f2d29" stroke-width="3" />
+  <rect x="19" y="19" width="26" height="20" rx="3" fill="#ffffff" stroke="#2f2d29" stroke-width="2" />
+  <rect x="23" y="24" width="4" height="4" fill="#2f2d29" />
+  <rect x="37" y="24" width="4" height="4" fill="#2f2d29" />
+  <path d="M28 32H36" stroke="#2f2d29" stroke-width="2.5" stroke-linecap="round" />
+  <path d="M32 14V8" stroke="#2f2d29" stroke-width="3" stroke-linecap="round" />
+  <circle cx="32" cy="6" r="3" fill="#ffdbe0" stroke="#2f2d29" stroke-width="2" />
+  <path d="M22 44V49" stroke="#2f2d29" stroke-width="3" stroke-linecap="round" />
+  <path d="M42 44V49" stroke="#2f2d29" stroke-width="3" stroke-linecap="round" />
+</svg>`
+  },
+  sierra2_4a: {
+    text: "Wheee! I'm Sierra-chan! I'm super fast, light, and keep noise low! (っ＾▿＾)💨",
+    svg: `<svg class="pet-wiggle" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <path d="M32 8L37 23H53L40 32L45 48L32 38L19 48L24 32L11 23H27L32 8Z" fill="#fef0be" stroke="#2f2d29" stroke-width="3" stroke-linejoin="round" />
+  <path d="M11 26C7 26 5 30 7 33C9 35 12 33 13 31" fill="#ffffff" stroke="#2f2d29" stroke-width="2.5" />
+  <path d="M53 26C57 26 59 30 57 33C55 35 52 31 51 31" fill="#ffffff" stroke="#2f2d29" stroke-width="2.5" />
+  <circle cx="28" cy="27" r="1.5" fill="#2f2d29" />
+  <circle cx="36" cy="27" r="1.5" fill="#2f2d29" />
+  <path d="M30 31C31 32 33 32 34 31" stroke="#2f2d29" stroke-width="2" stroke-linecap="round" />
+</svg>`
+  },
+  heckbert: {
+    text: "Hello! I'm Heckby! I paint with rich, dynamic colors. Color magic! (🎨◕‿◕🎨)",
+    svg: `<svg class="pet-wiggle" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <path d="M46 16C36 12 20 16 16 28C12 40 22 48 34 48C42 48 52 42 50 30C49 24 51 18 46 16Z" fill="#cbeee4" stroke="#2f2d29" stroke-width="3" stroke-linejoin="round" />
+  <circle cx="22" cy="22" r="4" fill="#ffdbe0" />
+  <circle cx="22" cy="38" r="3" fill="#fef0be" />
+  <circle cx="44" cy="36" r="3.5" fill="#ffdbe0" />
+  <path d="M28 28C28 26 31 26 31 28" stroke="#2f2d29" stroke-width="2.5" stroke-linecap="round" />
+  <path d="M37 28C37 26 40 26 40 28" stroke="#2f2d29" stroke-width="2.5" stroke-linecap="round" />
+  <ellipse cx="27" cy="31" rx="2" ry="1" fill="#ffb3bd" />
+  <ellipse cx="41" cy="31" rx="2" ry="1" fill="#ffb3bd" />
+  <path d="M33 31.5C34 32.5 35 32.5 36 31.5" stroke="#2f2d29" stroke-width="2" stroke-linecap="round" />
+</svg>`
+  },
+  none: {
+    text: "Hi! I'm Nodi! I keep colors flat, sharp, and pixel-perfect. Super clean! (｀^´)✧",
+    svg: `<svg class="pet-jump" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect x="16" y="20" width="32" height="28" rx="2" fill="#ffffff" stroke="#2f2d29" stroke-width="3" />
+  <path d="M16 20L8 10L22 20Z" fill="#ffffff" stroke="#2f2d29" stroke-width="3" stroke-linejoin="round" />
+  <path d="M48 20L56 10L42 20Z" fill="#ffffff" stroke="#2f2d29" stroke-width="3" stroke-linejoin="round" />
+  <path d="M15 19L10 13L18 19Z" fill="#ffdbe0" />
+  <path d="M49 19L54 13L46 19Z" fill="#ffdbe0" />
+  <path d="M21 28L26 31" stroke="#2f2d29" stroke-width="2.5" stroke-linecap="round" />
+  <path d="M43 28L38 31" stroke="#2f2d29" stroke-width="2.5" stroke-linecap="round" />
+  <path d="M31 32L33 32L32 34Z" fill="#2f2d29" stroke="#2f2d29" stroke-width="1" />
+  <circle cx="19" cy="33" r="2" fill="#ffb3bd" />
+  <circle cx="45" cy="33" r="2" fill="#ffb3bd" />
+</svg>`
+  }
+};
+
+const ditherSelect = document.getElementById('dither');
+const petVisual = document.getElementById('dither-pet-visual');
+const petText = document.getElementById('dither-pet-text');
+
+if (ditherSelect && petVisual && petText) {
+  const updateDitherPet = () => {
+    const val = ditherSelect.value;
+    const pet = ditherPets[val] || ditherPets.floyd_steinberg;
+    petText.textContent = pet.text;
+    petVisual.innerHTML = pet.svg;
+  };
+
+  ditherSelect.addEventListener('change', updateDitherPet);
+  updateDitherPet(); // init
+}
+
+
