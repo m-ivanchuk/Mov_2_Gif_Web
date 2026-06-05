@@ -976,10 +976,17 @@ body::before {
   font-weight: 500;
 }
 
-.empty-icon {
-  font-size: 2.2rem;
-  margin-bottom: 12px;
-  display: block;
+.empty-state-mascot {
+  width: 100px;
+  height: 100px;
+  margin: 0 auto 16px auto;
+  animation: floatSlow 5s ease-in-out infinite alternate;
+}
+
+.kawaii-palette-artist {
+  width: 100%;
+  height: 100%;
+  filter: drop-shadow(2px 3px 0px rgba(47, 45, 41, 0.15));
 }
 
 /* Polaroid Card Frame */

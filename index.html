@@ -100,12 +100,15 @@
     <div id="wasm-loading-banner" class="wasm-loading-banner card">
       <div class="wasm-loading-spinner-container">
         <svg class="wiggling-paws" width="60" height="40" viewBox="0 0 60 40" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <circle cx="15" cy="20" r="10" fill="#2f2d29" />
-          <circle cx="20" cy="10" r="4" fill="#ffdbe0" />
-          <circle cx="10" cy="12" r="3" fill="#ffdbe0" />
-          <circle cx="45" cy="20" r="10" fill="#2f2d29" />
-          <circle cx="40" cy="10" r="4" fill="#ffdbe0" />
-          <circle cx="50" cy="12" r="3" fill="#ffdbe0" />
+          <circle cx="15" cy="24" r="9" fill="#2f2d29" />
+          <circle cx="7" cy="13" r="3" fill="#ffdbe0" />
+          <circle cx="15" cy="9" r="3.5" fill="#ffdbe0" />
+          <circle cx="23" cy="13" r="3" fill="#ffdbe0" />
+          
+          <circle cx="45" cy="24" r="9" fill="#2f2d29" />
+          <circle cx="37" cy="13" r="3" fill="#ffdbe0" />
+          <circle cx="45" cy="9" r="3.5" fill="#ffdbe0" />
+          <circle cx="53" cy="13" r="3" fill="#ffdbe0" />
         </svg>
       </div>
       <p class="wasm-loading-title">Initializing WebAssembly Engine...</p>
@@ -354,7 +357,29 @@
 
           <div id="results-feed" class="results-feed">
             <div id="empty-state" class="empty-state">
-              <span class="empty-icon">🎨</span>
+              <div class="empty-state-mascot">
+                <svg class="kawaii-palette-artist" viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <!-- Cute Palette Shape with a thumbhole -->
+                  <path d="M85 30C70 20 40 25 30 45C20 65 30 85 55 90C70 93 85 85 92 70C98 58 100 40 85 30Z" fill="#fef0be" stroke="#2f2d29" stroke-width="3.5" stroke-linejoin="round" />
+                  <!-- Thumb hole -->
+                  <circle cx="45" cy="72" r="7" fill="#faf7f2" stroke="#2f2d29" stroke-width="3" />
+                  <!-- Paint blobs -->
+                  <circle cx="42" cy="40" r="6" fill="#ffdbe0" />
+                  <circle cx="62" cy="38" r="6.5" fill="#cbeee4" />
+                  <circle cx="78" cy="48" r="5.5" fill="#cbe6f6" />
+                  <!-- Artist eyes -->
+                  <circle cx="58" cy="58" r="2.5" fill="#2f2d29" />
+                  <circle cx="72" cy="58" r="2.5" fill="#2f2d29" />
+                  <!-- Smiling mouth -->
+                  <path d="M63 64C64 65.5 66 65.5 67 64" stroke="#2f2d29" stroke-width="2.5" stroke-linecap="round" />
+                  <!-- Blush -->
+                  <circle cx="53" cy="61" r="2" fill="#ffb3bd" />
+                  <circle cx="77" cy="61" r="2" fill="#ffb3bd" />
+                  <!-- Tiny beret hat -->
+                  <path d="M68 25C65 21 52 23 50 27C48 31 52 33 58 33C64 33 71 29 68 25Z" fill="#ffdbe0" stroke="#2f2d29" stroke-width="2.5" />
+                  <path d="M59 23V19" stroke="#2f2d29" stroke-width="2" stroke-linecap="round" />
+                </svg>
+              </div>
               <p>Adjust settings and press "Convert to GIF" to compare renders!</p>
             </div>
             <!-- Result cards will be prepended here -->
@@ -387,13 +412,15 @@
         <!-- Cute progress character that wiggles -->
         <div class="cute-progress-character-container">
           <svg class="wiggling-paws" width="60" height="40" viewBox="0 0 60 40" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <circle cx="15" cy="20" r="10" fill="#2f2d29" />
-            <circle cx="20" cy="10" r="4" fill="#ffdbe0" />
-            <circle cx="10" cy="12" r="3" fill="#ffdbe0" />
+            <circle cx="15" cy="24" r="9" fill="#2f2d29" />
+            <circle cx="7" cy="13" r="3" fill="#ffdbe0" />
+            <circle cx="15" cy="9" r="3.5" fill="#ffdbe0" />
+            <circle cx="23" cy="13" r="3" fill="#ffdbe0" />
             
-            <circle cx="45" cy="20" r="10" fill="#2f2d29" />
-            <circle cx="40" cy="10" r="4" fill="#ffdbe0" />
-            <circle cx="50" cy="12" r="3" fill="#ffdbe0" />
+            <circle cx="45" cy="24" r="9" fill="#2f2d29" />
+            <circle cx="37" cy="13" r="3" fill="#ffdbe0" />
+            <circle cx="45" cy="9" r="3.5" fill="#ffdbe0" />
+            <circle cx="53" cy="13" r="3" fill="#ffdbe0" />
           </svg>
         </div>
         <div class="progress-bar">
