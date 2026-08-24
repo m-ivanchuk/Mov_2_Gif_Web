@@ -69,6 +69,12 @@ const cropHint = document.getElementById('crop-hint');
 const cropResetBtn = document.getElementById('crop-reset-btn');
 const transparencyToggle = document.getElementById('transparency');
 const transparencyLabel = document.getElementById('transparency-label');
+const denoiseToggle = document.getElementById('denoise');
+const denoiseLabel = document.getElementById('denoise-label');
+const dropDupesToggle = document.getElementById('drop-dupes');
+const dropDupesLabel = document.getElementById('drop-dupes-label');
+const diffRectToggle = document.getElementById('diff-rect');
+const diffRectLabel = document.getElementById('diff-rect-label');
 
 // Palette Editor UI
 const generatePaletteBtn = document.getElementById('generate-palette-btn');
@@ -253,13 +259,23 @@ function getOutputDimensions() {
 
 function buildGifFilterGraph(fps, width, height, playback) {
   const crop = getCropState();
-  const cropF = crop.active ? `crop=${crop.w}:${crop.h}:${crop.x}:${crop.y}` : '';
-  const tail = `fps=${fps},scale=${width}:${height}:flags=lanczos`;
+  const pre = [];
+  if (crop.active) pre.push(`crop=${crop.w}:${crop.h}:${crop.x}:${crop.y}`);
+  // Mild hqdn3d defaults: enough to flatten codec noise, not a separate strength slider.
+  if (denoiseToggle && denoiseToggle.checked) pre.push('hqdn3d=4:3:6:4');
+  const preF = pre.join(',');
+
+  const post = [`fps=${fps}`, `scale=${width}:${height}:flags=lanczos`];
+  if (dropDupesToggle && dropDupesToggle.checked) {
+    post.push('mpdecimate', 'setpts=PTS-STARTPTS');
+  }
+  const tail = post.join(',');
+
   if (playback === 'pingpong') {
-    const head = cropF ? `[0:v]${cropF},split` : `[0:v]split`;
+    const head = preF ? `[0:v]${preF},split` : `[0:v]split`;
     return `${head}[v1][v2];[v2]reverse[v2r];[v1][v2r]concat=n=2:v=1[merged];[merged]${tail}`;
   }
-  return cropF ? `${cropF},${tail}` : tail;
+  return preF ? `${preF},${tail}` : tail;
 }
 
 // --- Trim (dual-handle keep-range at current output FPS) ---
@@ -955,6 +971,19 @@ transparencyToggle.addEventListener('change', (e) => {
   transparencyLabel.textContent = e.target.checked ? 'On' : 'Off';
 });
 
+function bindOnOffToggle(toggle, label) {
+  if (!toggle || !label) return;
+  const sync = () => {
+    label.textContent = toggle.checked ? 'On' : 'Off';
+  };
+  toggle.addEventListener('change', sync);
+  sync();
+}
+
+bindOnOffToggle(denoiseToggle, denoiseLabel);
+bindOnOffToggle(dropDupesToggle, dropDupesLabel);
+bindOnOffToggle(diffRectToggle, diffRectLabel);
+
 function updateSliderFill(slider) {
   const min = parseFloat(slider.min);
   const max = parseFloat(slider.max);
@@ -1466,6 +1495,9 @@ async function startConversion() {
     cropRight: crop.right,
     cropTop: crop.top,
     cropBottom: crop.bottom,
+    denoise: !!(denoiseToggle && denoiseToggle.checked),
+    dropDupes: !!(dropDupesToggle && dropDupesToggle.checked),
+    diffRect: !!(diffRectToggle && diffRectToggle.checked),
     paletteEdited: state.customPaletteEdited,
     paletteDataUrl: null
   };
@@ -1547,7 +1579,10 @@ async function startConversion() {
     const filterSource = buildGifFilterGraph(fps, width, height, playback);
 
     const palettegenOpts = `max_colors=${colors}` + (trans === 'yes' ? ':reserve_transparent=1' : '');
-    const paletteuseOpts = (trans === 'yes' ? 'alpha_threshold=128:' : '') + `dither=${dither}`;
+    let paletteuseOpts = (trans === 'yes' ? 'alpha_threshold=128:' : '') + `dither=${dither}`;
+    if (diffRectToggle && diffRectToggle.checked) {
+      paletteuseOpts += ':diff_mode=rectangle';
+    }
 
     // 4. Exec Pass 1: Palette Analysis (Only if not using custom palette!)
     if (!state.customPaletteEdited) {
@@ -1686,6 +1721,10 @@ function createResultCard(id, settings) {
   if (settings.cropLeft || settings.cropRight || settings.cropTop || settings.cropBottom) {
     badges.push(`Crop L${settings.cropLeft || 0} R${settings.cropRight || 0} T${settings.cropTop || 0} B${settings.cropBottom || 0}`);
   }
+
+  if (settings.denoise) badges.push('Denoise');
+  if (settings.dropDupes) badges.push('Drop dupes');
+  if (settings.diffRect) badges.push('Diff rect');
   
   if (settings.width && settings.height) {
     badges.push(`${settings.width}x${settings.height}`);
@@ -1726,6 +1765,19 @@ function createResultCard(id, settings) {
       
       transparencyToggle.checked = (sData.trans === 'yes');
       transparencyToggle.dispatchEvent(new Event('change'));
+
+      if (denoiseToggle) {
+        denoiseToggle.checked = !!sData.denoise;
+        denoiseToggle.dispatchEvent(new Event('change'));
+      }
+      if (dropDupesToggle) {
+        dropDupesToggle.checked = !!sData.dropDupes;
+        dropDupesToggle.dispatchEvent(new Event('change'));
+      }
+      if (diffRectToggle) {
+        diffRectToggle.checked = !!sData.diffRect;
+        diffRectToggle.dispatchEvent(new Event('change'));
+      }
       
       document.getElementById('dither').value = sData.dither;
       if (sData.playback) {

@@ -397,6 +397,33 @@
                     <option value="pingpong">Ping Pong</option>
                   </select>
                 </div>
+
+                <div class="setting-group">
+                  <label class="kawaii-label">Denoise</label>
+                  <label class="toggle">
+                    <input type="checkbox" id="denoise">
+                    <span class="toggle-slider"></span>
+                    <span class="toggle-label" id="denoise-label">Off</span>
+                  </label>
+                </div>
+
+                <div class="setting-group">
+                  <label class="kawaii-label">Drop dupes</label>
+                  <label class="toggle">
+                    <input type="checkbox" id="drop-dupes">
+                    <span class="toggle-slider"></span>
+                    <span class="toggle-label" id="drop-dupes-label">Off</span>
+                  </label>
+                </div>
+
+                <div class="setting-group">
+                  <label class="kawaii-label">Diff rectangle</label>
+                  <label class="toggle">
+                    <input type="checkbox" id="diff-rect">
+                    <span class="toggle-slider"></span>
+                    <span class="toggle-label" id="diff-rect-label">Off</span>
+                  </label>
+                </div>
               </div>
             </div>
 
@@ -608,6 +635,21 @@
           <li><strong>Scale:</strong>
             <ul>
               <li>Scaling down (e.g., 50% or 75%) is the easiest way to significantly reduce the output GIF file size.</li>
+            </ul>
+          </li>
+          <li><strong>Denoise:</strong>
+            <ul>
+              <li>Soft temporal/spatial cleanup before colors are quantized. Helps camera footage and compressed video; pixel art usually does not need it. Uses a mild FFmpeg default (no extra sliders).</li>
+            </ul>
+          </li>
+          <li><strong>Drop dupes:</strong>
+            <ul>
+              <li>Removes near-identical frames and keeps the pause as a longer GIF delay. Best for screen recordings and clips with still moments.</li>
+            </ul>
+          </li>
+          <li><strong>Diff rectangle:</strong>
+            <ul>
+              <li>Encodes only the bounding box that changed between frames. Strong on UI/sprites with a static background; weak on noisy full-frame motion.</li>
             </ul>
           </li>
         </ul>
