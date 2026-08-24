@@ -1151,6 +1151,7 @@ body::before {
 
 /* Toggle Switch */
 .toggle {
+  position: relative;
   display: inline-flex;
   align-items: center;
   gap: 10px;
@@ -1161,8 +1162,10 @@ body::before {
 .toggle input {
   position: absolute;
   opacity: 0;
-  width: 0;
-  height: 0;
+  width: 1px;
+  height: 1px;
+  margin: 0;
+  pointer-events: none;
 }
 
 .toggle-slider {
@@ -1187,14 +1190,23 @@ body::before {
   background-color: #ffffff;
   border: 1.5px solid var(--line-dark);
   transition: transform var(--transition);
+  transform: translateX(0);
 }
 
 .toggle input:checked + .toggle-slider {
   background-color: var(--pastel-mint);
 }
 
+.toggle input:not(:checked) + .toggle-slider {
+  background-color: #eae7e0;
+}
+
 .toggle input:checked + .toggle-slider::after {
   transform: translateX(22px);
+}
+
+.toggle input:not(:checked) + .toggle-slider::after {
+  transform: translateX(0);
 }
 
 .toggle-label {

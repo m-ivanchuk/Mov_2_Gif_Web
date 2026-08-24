@@ -967,22 +967,27 @@ window.addEventListener('resize', () => {
   if (state.file) layoutMediaStage();
 });
 
-transparencyToggle.addEventListener('change', (e) => {
-  transparencyLabel.textContent = e.target.checked ? 'On' : 'Off';
-});
-
 function bindOnOffToggle(toggle, label) {
   if (!toggle || !label) return;
   const sync = () => {
     label.textContent = toggle.checked ? 'On' : 'Off';
   };
   toggle.addEventListener('change', sync);
+  toggle.addEventListener('input', sync);
   sync();
+  return sync;
 }
 
-bindOnOffToggle(denoiseToggle, denoiseLabel);
-bindOnOffToggle(dropDupesToggle, dropDupesLabel);
-bindOnOffToggle(diffRectToggle, diffRectLabel);
+const syncToggleLabels = [
+  bindOnOffToggle(transparencyToggle, transparencyLabel),
+  bindOnOffToggle(denoiseToggle, denoiseLabel),
+  bindOnOffToggle(dropDupesToggle, dropDupesLabel),
+  bindOnOffToggle(diffRectToggle, diffRectLabel)
+].filter(Boolean);
+
+window.addEventListener('pageshow', () => {
+  syncToggleLabels.forEach((sync) => sync());
+});
 
 function updateSliderFill(slider) {
   const min = parseFloat(slider.min);
