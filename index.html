@@ -236,6 +236,77 @@
             <h2 class="card-title">✿ Conversion Settings ✿</h2>
             
             <div class="settings-grid">
+              <!-- Trim & crop: keep-range on the timeline, crop rectangle on the frame -->
+              <div class="trim-box full-width">
+                <div class="slider-header">
+                  <span class="slider-label">Trim & Crop</span>
+                  <span class="value-badge badge-blue" id="trim-kept-badge">All</span>
+                </div>
+
+                <div id="trim-preview-wrap" class="trim-preview-wrap">
+                  <div id="media-stage" class="media-stage">
+                    <video id="trim-preview" muted playsinline preload="metadata"></video>
+                    <div id="crop-overlay" class="crop-overlay">
+                      <div id="crop-rect" class="crop-rect">
+                        <span class="crop-handle" data-edge="n"></span>
+                        <span class="crop-handle" data-edge="s"></span>
+                        <span class="crop-handle" data-edge="e"></span>
+                        <span class="crop-handle" data-edge="w"></span>
+                        <span class="crop-handle crop-handle-corner" data-edge="nw"></span>
+                        <span class="crop-handle crop-handle-corner" data-edge="ne"></span>
+                        <span class="crop-handle crop-handle-corner" data-edge="sw"></span>
+                        <span class="crop-handle crop-handle-corner" data-edge="se"></span>
+                        <span class="crop-edge-label" data-crop-label="left" hidden>0</span>
+                        <span class="crop-edge-label" data-crop-label="right" hidden>0</span>
+                        <span class="crop-edge-label" data-crop-label="top" hidden>0</span>
+                        <span class="crop-edge-label" data-crop-label="bottom" hidden>0</span>
+                      </div>
+                    </div>
+                    <button type="button" id="trim-preview-play" class="trim-preview-play" aria-label="Play trimmed range">▶</button>
+                  </div>
+                </div>
+                <p id="trim-preview-fallback" class="trim-fallback">No browser preview for this file — trim by frame count, then check the GIF.</p>
+                <p id="trim-frame-label" class="trim-frame-label">Move a handle to scrub the keep range</p>
+                <div class="crop-meta">
+                  <span class="hint" id="crop-hint">Keeping full frame</span>
+                  <button type="button" id="crop-reset-btn" class="btn-secondary-cute crop-reset-btn hidden">Reset crop</button>
+                </div>
+
+                <div class="trim-range-header">
+                  <div class="stepper-control" title="Start of kept range">
+                    <button type="button" class="btn-step" data-trim-nudge="start" data-dir="-1" aria-label="Nudge start left">−</button>
+                    <span class="value-badge badge-mint" id="trim-start-value">0:00.0</span>
+                    <button type="button" class="btn-step" data-trim-nudge="start" data-dir="1" aria-label="Nudge start right">+</button>
+                  </div>
+                  <div class="stepper-control" title="End of kept range">
+                    <button type="button" class="btn-step" data-trim-nudge="end" data-dir="-1" aria-label="Nudge end left">−</button>
+                    <span class="value-badge badge-pink" id="trim-end-value">0:00.0</span>
+                    <button type="button" class="btn-step" data-trim-nudge="end" data-dir="1" aria-label="Nudge end right">+</button>
+                  </div>
+                </div>
+
+                <div class="trim-range" id="trim-range">
+                  <div class="trim-range-axis" id="trim-range-axis">
+                    <div class="trim-range-track">
+                      <div class="trim-range-keep" id="trim-range-keep"></div>
+                    </div>
+                    <div class="trim-playhead hidden" id="trim-playhead"></div>
+                    <button type="button" class="trim-thumb trim-thumb-start" id="trim-thumb-start" role="slider" aria-label="Trim start"></button>
+                    <button type="button" class="trim-thumb trim-thumb-end" id="trim-thumb-end" role="slider" aria-label="Trim end"></button>
+                  </div>
+                </div>
+
+                <div class="slider-footer">
+                  <span id="trim-timeline-start">0:00.0</span>
+                  <span id="trim-timeline-end">0:00.0</span>
+                </div>
+
+                <input type="range" id="trim-start" min="0" max="0" value="0" step="1" class="hidden" tabindex="-1" aria-hidden="true">
+                <input type="range" id="trim-end" min="0" max="0" value="0" step="1" class="hidden" tabindex="-1" aria-hidden="true">
+
+                <span class="hint" id="trim-hint">Keeping all frames</span>
+              </div>
+
               <!-- Symmetrical FPS Slider -->
               <div class="kawaii-slider-group full-width">
                 <div class="slider-header">
@@ -513,6 +584,18 @@
               <li><strong>256 colors</strong>: Max quality, richest look, but largest file size.</li>
               <li><strong>64-128 colors</strong>: Sweet spot for web animations and fast loading.</li>
               <li><strong>16-32 colors</strong>: Retro/lo-fi look, ultra-light files.</li>
+            </ul>
+          </li>
+          <li><strong>Trim:</strong>
+            <ul>
+              <li>Drag the two handles on one timeline to keep a range. The left handle is the first frame, the right handle is the last — the highlighted middle is what goes into the GIF.</li>
+              <li>If the browser can play the file, moving a handle scrubs that frame in the preview. Otherwise trim by the handles and confirm on the resulting GIF.</li>
+            </ul>
+          </li>
+          <li><strong>Crop:</strong>
+            <ul>
+              <li>Drag the rectangle edges on the preview to cut pixels from each side. The dimmed area is discarded; FFmpeg crops with four values (width, height, x, y).</li>
+              <li>The overlay works even if the browser cannot play the file — the box still matches the video aspect ratio.</li>
             </ul>
           </li>
           <li><strong>FPS (Frames Per Second):</strong>

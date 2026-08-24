@@ -13,7 +13,8 @@ const state = {
   width: 0,
   height: 0,
   customPaletteEdited: false,
-  customPaletteColors: []
+  customPaletteColors: [],
+  crop: { left: 0, right: 0, top: 0, bottom: 0 }
 };
 
 let activeSwatchIndex = null;
@@ -42,6 +43,29 @@ const colorsValue = document.getElementById('colors-value');
 const scaleSlider = document.getElementById('scale');
 const scaleValue = document.getElementById('scale-value');
 const scaleHint = document.getElementById('scale-hint');
+const trimStartSlider = document.getElementById('trim-start');
+const trimStartValue = document.getElementById('trim-start-value');
+const trimEndSlider = document.getElementById('trim-end');
+const trimEndValue = document.getElementById('trim-end-value');
+const trimHint = document.getElementById('trim-hint');
+const trimKeptBadge = document.getElementById('trim-kept-badge');
+const trimPreview = document.getElementById('trim-preview');
+const trimPreviewWrap = document.getElementById('trim-preview-wrap');
+const trimPreviewFallback = document.getElementById('trim-preview-fallback');
+const trimPreviewPlay = document.getElementById('trim-preview-play');
+const trimFrameLabel = document.getElementById('trim-frame-label');
+const trimRange = document.getElementById('trim-range');
+const trimRangeAxis = document.getElementById('trim-range-axis');
+const trimRangeKeep = document.getElementById('trim-range-keep');
+const trimThumbStart = document.getElementById('trim-thumb-start');
+const trimThumbEnd = document.getElementById('trim-thumb-end');
+const trimPlayhead = document.getElementById('trim-playhead');
+const trimTimelineStart = document.getElementById('trim-timeline-start');
+const trimTimelineEnd = document.getElementById('trim-timeline-end');
+const mediaStage = document.getElementById('media-stage');
+const cropRect = document.getElementById('crop-rect');
+const cropHint = document.getElementById('crop-hint');
+const cropResetBtn = document.getElementById('crop-reset-btn');
 const transparencyToggle = document.getElementById('transparency');
 const transparencyLabel = document.getElementById('transparency-label');
 
@@ -80,6 +104,14 @@ function formatTime(seconds) {
   const m = Math.floor(seconds / 60);
   const s = Math.floor(seconds % 60);
   return `${m}:${s.toString().padStart(2, '0')}`;
+}
+
+function formatTimePrecise(seconds) {
+  const safe = Math.max(0, seconds || 0);
+  const m = Math.floor(safe / 60);
+  const s = (safe % 60).toFixed(1);
+  const [whole, frac] = s.split('.');
+  return `${m}:${whole.padStart(2, '0')}.${frac}`;
 }
 
 // --- Initialize FFmpeg.wasm ---
@@ -134,6 +166,7 @@ window.addEventListener('DOMContentLoaded', initFFmpeg);
 fpsSlider.addEventListener('input', (e) => {
   fpsValue.textContent = e.target.value;
   updateSliderFill(e.target);
+  updateTrimControls();
 });
 
 colorsSlider.addEventListener('input', (e) => {
@@ -149,22 +182,715 @@ scaleSlider.addEventListener('input', (e) => {
 
 function updateScaleHint() {
   if (state.width && state.height) {
-    const scale = parseInt(scaleSlider.value, 10) / 100;
-    const w = Math.round(state.width * scale);
-    const h = Math.round(state.height * scale);
-    scaleHint.textContent = `Output size: ${w}x${h} px`;
+    const out = getOutputDimensions();
+    const crop = getCropState();
+    if (crop.active) {
+      scaleHint.textContent = `Output size: ${out.width}x${out.height} px (from crop ${crop.w}x${crop.h})`;
+    } else {
+      scaleHint.textContent = `Output size: ${out.width}x${out.height} px`;
+    }
   }
 }
+
+function evenSize(n) {
+  const v = Math.max(2, Math.floor(n));
+  return v - (v % 2);
+}
+
+function getCropState() {
+  const srcW = state.width || 0;
+  const srcH = state.height || 0;
+  const crop = state.crop || { left: 0, right: 0, top: 0, bottom: 0 };
+  const minKeep = 2;
+  let left = Math.max(0, Math.round(Number(crop.left) || 0));
+  let right = Math.max(0, Math.round(Number(crop.right) || 0));
+  let top = Math.max(0, Math.round(Number(crop.top) || 0));
+  let bottom = Math.max(0, Math.round(Number(crop.bottom) || 0));
+
+  if (srcW > 0 && left + right > srcW - minKeep) {
+    right = Math.max(0, srcW - minKeep - left);
+  }
+  if (srcH > 0 && top + bottom > srcH - minKeep) {
+    bottom = Math.max(0, srcH - minKeep - top);
+  }
+
+  let w = srcW > 0 ? Math.max(minKeep, srcW - left - right) : 0;
+  let h = srcH > 0 ? Math.max(minKeep, srcH - top - bottom) : 0;
+  if (srcW > 0) {
+    w = evenSize(w);
+    if (left + w > srcW) left = Math.max(0, srcW - w);
+    right = Math.max(0, srcW - left - w);
+  }
+  if (srcH > 0) {
+    h = evenSize(h);
+    if (top + h > srcH) top = Math.max(0, srcH - h);
+    bottom = Math.max(0, srcH - top - h);
+  }
+
+  return {
+    left, right, top, bottom,
+    x: left,
+    y: top,
+    w,
+    h,
+    srcW,
+    srcH,
+    active: left > 0 || right > 0 || top > 0 || bottom > 0
+  };
+}
+
+function getOutputDimensions() {
+  const crop = getCropState();
+  const srcW = crop.w || state.width || 0;
+  const srcH = crop.h || state.height || 0;
+  const scale = parseInt(scaleSlider.value, 10) / 100;
+  return {
+    width: Math.max(2, Math.round(srcW * scale)),
+    height: Math.max(2, Math.round(srcH * scale))
+  };
+}
+
+function buildGifFilterGraph(fps, width, height, playback) {
+  const crop = getCropState();
+  const cropF = crop.active ? `crop=${crop.w}:${crop.h}:${crop.x}:${crop.y}` : '';
+  const tail = `fps=${fps},scale=${width}:${height}:flags=lanczos`;
+  if (playback === 'pingpong') {
+    const head = cropF ? `[0:v]${cropF},split` : `[0:v]split`;
+    return `${head}[v1][v2];[v2]reverse[v2r];[v1][v2r]concat=n=2:v=1[merged];[merged]${tail}`;
+  }
+  return cropF ? `${cropF},${tail}` : tail;
+}
+
+// --- Trim (dual-handle keep-range at current output FPS) ---
+let trimPreviewUrl = null;
+let trimPreviewGeneration = 0;
+let trimScrubbing = false;
+let activeTrimHandle = null;
+
+function getTrimState() {
+  const fps = parseInt(fpsSlider.value, 10) || 12;
+  const totalFrames = Math.max(1, Math.round((state.durationSeconds || 0) * fps));
+  let cutStart = parseInt(trimStartSlider.value, 10) || 0;
+  let cutEnd = parseInt(trimEndSlider.value, 10) || 0;
+  const maxCut = Math.max(0, totalFrames - 1);
+
+  cutStart = Math.max(0, Math.min(cutStart, maxCut));
+  cutEnd = Math.max(0, Math.min(cutEnd, maxCut));
+  if (cutStart + cutEnd >= totalFrames) {
+    cutEnd = Math.max(0, totalFrames - 1 - cutStart);
+  }
+
+  const kept = Math.max(1, totalFrames - cutStart - cutEnd);
+  const startFrame = cutStart;
+  const endFrame = totalFrames - 1 - cutEnd;
+  const startTime = startFrame / fps;
+  const duration = kept / fps;
+  const endTime = startTime + duration;
+
+  return {
+    fps,
+    totalFrames,
+    cutStart,
+    cutEnd,
+    kept,
+    startFrame,
+    endFrame,
+    startTime,
+    duration,
+    endTime,
+    active: cutStart > 0 || cutEnd > 0
+  };
+}
+
+function getTrimInputArgs() {
+  const trim = getTrimState();
+  if (!trim.active) return [];
+  const args = [];
+  if (trim.startTime > 0.0005) {
+    args.push('-ss', trim.startTime.toFixed(4));
+  }
+  args.push('-t', Math.max(trim.duration, 1 / trim.fps).toFixed(4));
+  return args;
+}
+
+function isTrimPreviewVisible() {
+  return !!(trimPreview && trimPreviewWrap && trimPreviewWrap.classList.contains('has-preview'));
+}
+
+function frameToAxisPercent(frame, totalFrames) {
+  const max = Math.max(1, totalFrames - 1);
+  return (frame / max) * 100;
+}
+
+function clientXToFrame(clientX) {
+  if (!trimRangeAxis) return 0;
+  const rect = trimRangeAxis.getBoundingClientRect();
+  const t = rect.width <= 0 ? 0 : (clientX - rect.left) / rect.width;
+  const trim = getTrimState();
+  const max = Math.max(0, trim.totalFrames - 1);
+  return Math.round(Math.max(0, Math.min(1, t)) * max);
+}
+
+function updateTrimRangeUI() {
+  const trim = getTrimState();
+  const startPct = frameToAxisPercent(trim.startFrame, trim.totalFrames);
+  const endPct = frameToAxisPercent(trim.endFrame, trim.totalFrames);
+
+  if (trimRangeKeep) {
+    trimRangeKeep.style.left = `${startPct}%`;
+    trimRangeKeep.style.width = `${Math.max(0, endPct - startPct)}%`;
+  }
+  if (trimThumbStart) trimThumbStart.style.left = `${startPct}%`;
+  if (trimThumbEnd) trimThumbEnd.style.left = `${endPct}%`;
+
+  if (trimThumbStart) {
+    trimThumbStart.setAttribute('aria-valuemin', '0');
+    trimThumbStart.setAttribute('aria-valuemax', String(trim.endFrame));
+    trimThumbStart.setAttribute('aria-valuenow', String(trim.startFrame));
+  }
+  if (trimThumbEnd) {
+    trimThumbEnd.setAttribute('aria-valuemin', String(trim.startFrame));
+    trimThumbEnd.setAttribute('aria-valuemax', String(Math.max(0, trim.totalFrames - 1)));
+    trimThumbEnd.setAttribute('aria-valuenow', String(trim.endFrame));
+  }
+}
+
+function updateTrimFrameLabel(handle) {
+  if (!trimFrameLabel) return;
+  const trim = getTrimState();
+  if (!state.durationSeconds) {
+    trimFrameLabel.textContent = 'Move a handle to scrub the keep range';
+    return;
+  }
+
+  const which = handle || activeTrimHandle;
+  if (which === 'end') {
+    trimFrameLabel.textContent = `End · frame ${trim.endFrame + 1} / ${trim.totalFrames} · ${formatTimePrecise(Math.max(trim.startTime, trim.endTime - 1 / trim.fps))}`;
+  } else if (which === 'start') {
+    trimFrameLabel.textContent = `Start · frame ${trim.startFrame + 1} / ${trim.totalFrames} · ${formatTimePrecise(trim.startTime)}`;
+  } else if (isTrimPreviewVisible() && trimPreview && !trimPreview.paused) {
+    const frame = Math.min(trim.totalFrames, Math.max(1, Math.round(trimPreview.currentTime * trim.fps) + 1));
+    trimFrameLabel.textContent = `Playing · frame ${frame} / ${trim.totalFrames} · ${formatTimePrecise(trimPreview.currentTime)}`;
+  } else {
+    trimFrameLabel.textContent = `Keep frames ${trim.startFrame + 1}–${trim.endFrame + 1} of ${trim.totalFrames}`;
+  }
+}
+
+function updateTrimPlayhead(timeSeconds) {
+  if (!trimPlayhead || !state.durationSeconds) return;
+  const trim = getTrimState();
+  const pct = frameToAxisPercent((timeSeconds || 0) * trim.fps, trim.totalFrames);
+  trimPlayhead.style.left = `${Math.max(0, Math.min(100, pct))}%`;
+}
+
+function seekTrimPreview(handle) {
+  const trim = getTrimState();
+  const time = handle === 'end'
+    ? Math.max(trim.startTime, trim.endTime - 1 / trim.fps)
+    : trim.startTime;
+
+  updateTrimFrameLabel(handle);
+  updateTrimPlayhead(time);
+
+  if (!isTrimPreviewVisible()) return;
+  try {
+    trimPreview.pause();
+    trimPreview.currentTime = time;
+  } catch (e) {}
+  updateTrimPlayButton();
+}
+
+function updateTrimControls(changed) {
+  if (!trimStartSlider || !trimEndSlider) return;
+
+  const fps = parseInt(fpsSlider.value, 10) || 12;
+  const totalFrames = Math.max(1, Math.round((state.durationSeconds || 0) * fps));
+  const maxCut = Math.max(0, totalFrames - 1);
+
+  let cutStart = parseInt(trimStartSlider.value, 10) || 0;
+  let cutEnd = parseInt(trimEndSlider.value, 10) || 0;
+
+  cutStart = Math.max(0, Math.min(cutStart, maxCut));
+  cutEnd = Math.max(0, Math.min(cutEnd, maxCut));
+
+  if (cutStart + cutEnd >= totalFrames) {
+    if (changed === 'end') {
+      cutStart = Math.max(0, totalFrames - 1 - cutEnd);
+    } else {
+      cutEnd = Math.max(0, totalFrames - 1 - cutStart);
+    }
+  }
+
+  trimStartSlider.max = maxCut;
+  trimEndSlider.max = maxCut;
+  trimStartSlider.value = cutStart;
+  trimEndSlider.value = cutEnd;
+
+  const trim = getTrimState();
+  if (trimStartValue) trimStartValue.textContent = formatTimePrecise(trim.startTime);
+  if (trimEndValue) trimEndValue.textContent = formatTimePrecise(trim.endTime);
+  if (trimTimelineStart) trimTimelineStart.textContent = '0:00.0';
+  if (trimTimelineEnd) trimTimelineEnd.textContent = formatTimePrecise(state.durationSeconds || 0);
+
+  if (trimKeptBadge) {
+    trimKeptBadge.textContent = trim.active ? `${trim.kept} f` : 'All';
+  }
+  if (trimHint) {
+    if (!state.durationSeconds) {
+      trimHint.textContent = 'Keeping all frames';
+    } else if (!trim.active) {
+      trimHint.textContent = `Keeping all ${trim.totalFrames} frames at ${trim.fps} FPS`;
+    } else {
+      trimHint.textContent = `Keeping ${trim.kept} / ${trim.totalFrames} frames · ${formatTimePrecise(trim.startTime)} – ${formatTimePrecise(trim.endTime)}`;
+    }
+  }
+
+  updateTrimRangeUI();
+
+  if (changed === 'start' || changed === 'end') {
+    seekTrimPreview(changed);
+  } else {
+    updateTrimFrameLabel(null);
+    if (!trimScrubbing) syncTrimPreviewTime(false);
+  }
+}
+
+function applyTrimHandleFrame(handle, frame) {
+  const trim = getTrimState();
+  const max = Math.max(0, trim.totalFrames - 1);
+  if (handle === 'start') {
+    const startFrame = Math.max(0, Math.min(frame, trim.endFrame));
+    trimStartSlider.value = startFrame;
+    updateTrimControls('start');
+  } else {
+    const endFrame = Math.max(trim.startFrame, Math.min(frame, max));
+    trimEndSlider.value = max - endFrame;
+    updateTrimControls('end');
+  }
+}
+
+function nudgeTrimHandle(handle, dir) {
+  const trim = getTrimState();
+  if (handle === 'start') {
+    applyTrimHandleFrame('start', trim.startFrame + dir);
+  } else {
+    applyTrimHandleFrame('end', trim.endFrame + dir);
+  }
+}
+
+function nearestTrimHandle(clientX) {
+  if (!trimThumbStart || !trimThumbEnd) return 'start';
+  const startCx = trimThumbStart.getBoundingClientRect().left + trimThumbStart.offsetWidth / 2;
+  const endCx = trimThumbEnd.getBoundingClientRect().left + trimThumbEnd.offsetWidth / 2;
+  return Math.abs(clientX - startCx) <= Math.abs(clientX - endCx) ? 'start' : 'end';
+}
+
+function setActiveTrimHandle(handle) {
+  activeTrimHandle = handle;
+  if (trimThumbStart) trimThumbStart.classList.toggle('is-active', handle === 'start');
+  if (trimThumbEnd) trimThumbEnd.classList.toggle('is-active', handle === 'end');
+}
+
+function startTrimDrag(handle, clientX, pointerId, target) {
+  trimScrubbing = true;
+  setActiveTrimHandle(handle);
+  if (target && pointerId != null && target.setPointerCapture) {
+    try { target.setPointerCapture(pointerId); } catch (e) {}
+  }
+  applyTrimHandleFrame(handle, clientXToFrame(clientX));
+}
+
+function moveTrimDrag(clientX) {
+  if (!trimScrubbing || !activeTrimHandle) return;
+  applyTrimHandleFrame(activeTrimHandle, clientXToFrame(clientX));
+}
+
+function endTrimDrag() {
+  if (!trimScrubbing) return;
+  trimScrubbing = false;
+  setActiveTrimHandle(null);
+  updateTrimFrameLabel(null);
+}
+
+function clearTrimPreview() {
+  trimPreviewGeneration += 1;
+  trimScrubbing = false;
+  setActiveTrimHandle(null);
+  if (trimPreview) {
+    trimPreview.pause();
+    trimPreview.removeAttribute('src');
+    try { trimPreview.load(); } catch (e) {}
+  }
+  if (trimPreviewUrl) {
+    URL.revokeObjectURL(trimPreviewUrl);
+    trimPreviewUrl = null;
+  }
+  if (trimPreviewWrap) {
+    trimPreviewWrap.classList.remove('has-preview');
+    trimPreviewWrap.classList.remove('is-playing');
+  }
+  if (trimPlayhead) trimPlayhead.classList.add('hidden');
+  if (trimPreviewFallback) {
+    trimPreviewFallback.textContent = 'No browser preview for this file — trim by frame count, then check the GIF.';
+    trimPreviewFallback.classList.remove('hidden');
+  }
+  updateTrimPlayButton();
+}
+
+function tryAttachTrimPreview(file) {
+  clearTrimPreview();
+  if (!file || !trimPreview) return;
+
+  const generation = trimPreviewGeneration;
+  trimPreviewUrl = URL.createObjectURL(file);
+  if (trimPreviewFallback) {
+    trimPreviewFallback.textContent = 'Checking whether this browser can preview the file…';
+    trimPreviewFallback.classList.remove('hidden');
+  }
+
+  let settled = false;
+  const succeed = () => {
+    if (settled || generation !== trimPreviewGeneration) return;
+    settled = true;
+    if (trimPreviewWrap) trimPreviewWrap.classList.add('has-preview');
+    if (trimPreviewFallback) trimPreviewFallback.classList.add('hidden');
+    if (trimPlayhead) trimPlayhead.classList.remove('hidden');
+    syncTrimPreviewTime(true);
+    updateTrimPlayButton();
+  };
+  const fail = () => {
+    if (settled || generation !== trimPreviewGeneration) return;
+    settled = true;
+    if (trimPreviewWrap) trimPreviewWrap.classList.remove('has-preview');
+    if (trimPlayhead) trimPlayhead.classList.add('hidden');
+    if (trimPreviewFallback) {
+      trimPreviewFallback.textContent = 'No browser preview for this file — trim and crop still work; check the GIF.';
+      trimPreviewFallback.classList.remove('hidden');
+    }
+    trimPreview.pause();
+    trimPreview.removeAttribute('src');
+    try { trimPreview.load(); } catch (e) {}
+    if (trimPreviewUrl) {
+      URL.revokeObjectURL(trimPreviewUrl);
+      trimPreviewUrl = null;
+    }
+    updateTrimPlayButton();
+  };
+
+  trimPreview.addEventListener('loadedmetadata', succeed, { once: true });
+  trimPreview.addEventListener('loadeddata', succeed, { once: true });
+  trimPreview.addEventListener('canplay', succeed, { once: true });
+  trimPreview.addEventListener('error', fail, { once: true });
+  trimPreview.src = trimPreviewUrl;
+  trimPreview.load();
+
+  setTimeout(() => fail(), 3000);
+}
+
+function syncTrimPreviewTime(force) {
+  if (!isTrimPreviewVisible()) return;
+  if (!force && !trimPreview.paused) return;
+  const trim = getTrimState();
+  try {
+    trimPreview.currentTime = trim.startTime;
+  } catch (e) {}
+  updateTrimPlayhead(trim.startTime);
+}
+
+function updateTrimPlayButton() {
+  if (!trimPreviewPlay) return;
+  const playing = isTrimPreviewVisible() && trimPreview && !trimPreview.paused && !trimPreview.ended;
+  trimPreviewPlay.textContent = playing ? '❚❚' : '▶';
+  trimPreviewPlay.setAttribute('aria-label', playing ? 'Pause preview' : 'Play trimmed range');
+  if (trimPreviewWrap) trimPreviewWrap.classList.toggle('is-playing', playing);
+}
+
+function toggleTrimPreviewPlayback() {
+  if (!isTrimPreviewVisible()) return;
+  if (trimPreview.paused) {
+    const trim = getTrimState();
+    if (trimPreview.currentTime < trim.startTime - 0.04 || trimPreview.currentTime >= trim.endTime - 0.04) {
+      try { trimPreview.currentTime = trim.startTime; } catch (e) {}
+    }
+    trimPreview.play().catch(() => {});
+  } else {
+    trimPreview.pause();
+  }
+  updateTrimPlayButton();
+}
+
+if (trimRangeAxis) {
+  trimRangeAxis.addEventListener('pointerdown', (e) => {
+    if (e.button != null && e.button !== 0) return;
+    const handle = e.target.closest('.trim-thumb-end')
+      ? 'end'
+      : e.target.closest('.trim-thumb-start')
+        ? 'start'
+        : nearestTrimHandle(e.clientX);
+    e.preventDefault();
+    startTrimDrag(handle, e.clientX, e.pointerId, trimRangeAxis);
+  });
+
+  trimRangeAxis.addEventListener('pointermove', (e) => {
+    if (!trimScrubbing) return;
+    e.preventDefault();
+    moveTrimDrag(e.clientX);
+  });
+
+  const stopDrag = () => endTrimDrag();
+  trimRangeAxis.addEventListener('pointerup', stopDrag);
+  trimRangeAxis.addEventListener('pointercancel', stopDrag);
+}
+
+document.querySelectorAll('[data-trim-nudge]').forEach((btn) => {
+  btn.addEventListener('click', () => {
+    nudgeTrimHandle(btn.dataset.trimNudge, parseInt(btn.dataset.dir, 10));
+  });
+});
+
+[trimThumbStart, trimThumbEnd].forEach((thumb) => {
+  if (!thumb) return;
+  thumb.addEventListener('keydown', (e) => {
+    const handle = thumb === trimThumbEnd ? 'end' : 'start';
+    if (e.key === 'ArrowLeft') {
+      e.preventDefault();
+      nudgeTrimHandle(handle, -1);
+    } else if (e.key === 'ArrowRight') {
+      e.preventDefault();
+      nudgeTrimHandle(handle, 1);
+    } else if (e.key === 'Home') {
+      e.preventDefault();
+      applyTrimHandleFrame(handle, handle === 'start' ? 0 : getTrimState().startFrame);
+    } else if (e.key === 'End') {
+      e.preventDefault();
+      const trim = getTrimState();
+      applyTrimHandleFrame(handle, handle === 'end' ? trim.totalFrames - 1 : trim.endFrame);
+    }
+  });
+});
+
+if (trimPreview) {
+  trimPreview.addEventListener('play', () => {
+    if (trimScrubbing) {
+      trimPreview.pause();
+      return;
+    }
+    const trim = getTrimState();
+    if (trimPreview.currentTime < trim.startTime - 0.04 || trimPreview.currentTime >= trim.endTime - 0.04) {
+      try { trimPreview.currentTime = trim.startTime; } catch (e) {}
+    }
+    updateTrimPlayButton();
+  });
+
+  trimPreview.addEventListener('pause', updateTrimPlayButton);
+  trimPreview.addEventListener('ended', updateTrimPlayButton);
+
+  trimPreview.addEventListener('timeupdate', () => {
+    if (trimScrubbing || !isTrimPreviewVisible()) return;
+    const trim = getTrimState();
+    if (!trimPreview.paused &&
+        (trimPreview.currentTime < trim.startTime - 0.04 || trimPreview.currentTime >= trim.endTime - 0.04)) {
+      try { trimPreview.currentTime = trim.startTime; } catch (e) {}
+    }
+    updateTrimPlayhead(trimPreview.currentTime);
+    updateTrimFrameLabel(trimPreview.paused ? null : 'playing');
+  });
+
+  trimPreview.addEventListener('click', (e) => {
+    e.stopPropagation();
+    toggleTrimPreviewPlayback();
+  });
+}
+
+if (trimPreviewPlay) {
+  trimPreviewPlay.addEventListener('click', (e) => {
+    e.stopPropagation();
+    toggleTrimPreviewPlayback();
+  });
+}
+
+// --- Crop overlay (insets from each edge, FFmpeg crop=w:h:x:y) ---
+let cropDrag = null;
+
+function layoutMediaStage() {
+  if (!mediaStage || !state.width || !state.height) return;
+  const maxW = (trimPreviewWrap && trimPreviewWrap.clientWidth) ? trimPreviewWrap.clientWidth : 280;
+  const maxH = 240;
+  const fit = Math.min(maxW / state.width, maxH / state.height);
+  mediaStage.style.width = `${Math.max(1, Math.round(state.width * fit))}px`;
+  mediaStage.style.height = `${Math.max(1, Math.round(state.height * fit))}px`;
+  updateCropUI();
+}
+
+function updateCropUI() {
+  if (!cropRect || !state.width || !state.height) return;
+  const crop = getCropState();
+  const leftPct = (crop.left / crop.srcW) * 100;
+  const topPct = (crop.top / crop.srcH) * 100;
+  const widthPct = (crop.w / crop.srcW) * 100;
+  const heightPct = (crop.h / crop.srcH) * 100;
+
+  cropRect.style.left = `${leftPct}%`;
+  cropRect.style.top = `${topPct}%`;
+  cropRect.style.width = `${widthPct}%`;
+  cropRect.style.height = `${heightPct}%`;
+
+  const labels = {
+    left: crop.left,
+    right: crop.right,
+    top: crop.top,
+    bottom: crop.bottom
+  };
+  Object.keys(labels).forEach((side) => {
+    const el = document.querySelector(`[data-crop-label="${side}"]`);
+    if (!el) return;
+    if (labels[side] > 0) {
+      el.hidden = false;
+      el.textContent = String(labels[side]);
+    } else {
+      el.hidden = true;
+    }
+  });
+
+  if (cropHint) {
+    if (!crop.active) {
+      cropHint.textContent = `Keeping full frame ${crop.srcW}×${crop.srcH}`;
+    } else {
+      cropHint.textContent = `Keeping ${crop.w}×${crop.h} of ${crop.srcW}×${crop.srcH} · L${crop.left} R${crop.right} T${crop.top} B${crop.bottom}`;
+    }
+  }
+  if (cropResetBtn) {
+    cropResetBtn.classList.toggle('hidden', !crop.active);
+  }
+  updateScaleHint();
+}
+
+function resetCrop() {
+  state.crop = { left: 0, right: 0, top: 0, bottom: 0 };
+  updateCropUI();
+}
+
+function applyCropInsets(next, edges) {
+  const srcW = state.width || 0;
+  const srcH = state.height || 0;
+  const minKeep = 2;
+  const edgeList = edges || '';
+  let left = Math.max(0, Math.round(next.left));
+  let right = Math.max(0, Math.round(next.right));
+  let top = Math.max(0, Math.round(next.top));
+  let bottom = Math.max(0, Math.round(next.bottom));
+
+  if (srcW - left - right < minKeep) {
+    if (edgeList.includes('w') && !edgeList.includes('e')) {
+      left = Math.max(0, srcW - right - minKeep);
+    } else if (edgeList.includes('e') && !edgeList.includes('w')) {
+      right = Math.max(0, srcW - left - minKeep);
+    } else {
+      left = Math.max(0, Math.min(left, srcW - minKeep));
+      right = Math.max(0, srcW - left - minKeep);
+    }
+  }
+  if (srcH - top - bottom < minKeep) {
+    if (edgeList.includes('n') && !edgeList.includes('s')) {
+      top = Math.max(0, srcH - bottom - minKeep);
+    } else if (edgeList.includes('s') && !edgeList.includes('n')) {
+      bottom = Math.max(0, srcH - top - minKeep);
+    } else {
+      top = Math.max(0, Math.min(top, srcH - minKeep));
+      bottom = Math.max(0, srcH - top - minKeep);
+    }
+  }
+
+  state.crop = { left, right, top, bottom };
+  updateCropUI();
+}
+
+function startCropDrag(edge, clientX, clientY, pointerId, target) {
+  cropDrag = {
+    edge,
+    startX: clientX,
+    startY: clientY,
+    origin: { ...state.crop }
+  };
+  if (target && pointerId != null && target.setPointerCapture) {
+    try { target.setPointerCapture(pointerId); } catch (e) {}
+  }
+  document.querySelectorAll('.crop-handle').forEach((handle) => {
+    handle.classList.toggle('is-active', handle.dataset.edge === edge);
+  });
+}
+
+function moveCropDrag(clientX, clientY) {
+  if (!cropDrag || !mediaStage || !state.width || !state.height) return;
+  const rect = mediaStage.getBoundingClientRect();
+  if (rect.width <= 0 || rect.height <= 0) return;
+  const dx = ((clientX - cropDrag.startX) / rect.width) * state.width;
+  const dy = ((clientY - cropDrag.startY) / rect.height) * state.height;
+  const next = { ...cropDrag.origin };
+  const edge = cropDrag.edge;
+
+  if (edge.includes('w')) next.left = cropDrag.origin.left + dx;
+  if (edge.includes('e')) next.right = cropDrag.origin.right - dx;
+  if (edge.includes('n')) next.top = cropDrag.origin.top + dy;
+  if (edge.includes('s')) next.bottom = cropDrag.origin.bottom - dy;
+
+  applyCropInsets(next, edge);
+}
+
+function endCropDrag() {
+  if (!cropDrag) return;
+  cropDrag = null;
+  document.querySelectorAll('.crop-handle').forEach((handle) => {
+    handle.classList.remove('is-active');
+  });
+}
+
+if (cropRect) {
+  cropRect.addEventListener('pointerdown', (e) => {
+    const handle = e.target.closest('.crop-handle');
+    if (!handle) return;
+    e.preventDefault();
+    e.stopPropagation();
+    startCropDrag(handle.dataset.edge, e.clientX, e.clientY, e.pointerId, handle);
+  });
+
+  cropRect.addEventListener('pointermove', (e) => {
+    if (!cropDrag) return;
+    e.preventDefault();
+    moveCropDrag(e.clientX, e.clientY);
+  });
+
+  cropRect.addEventListener('pointerup', endCropDrag);
+  cropRect.addEventListener('pointercancel', endCropDrag);
+}
+
+window.addEventListener('pointermove', (e) => {
+  if (!cropDrag) return;
+  moveCropDrag(e.clientX, e.clientY);
+});
+window.addEventListener('pointerup', endCropDrag);
+window.addEventListener('pointercancel', endCropDrag);
+
+if (cropResetBtn) {
+  cropResetBtn.addEventListener('click', resetCrop);
+}
+
+window.addEventListener('resize', () => {
+  if (state.file) layoutMediaStage();
+});
 
 transparencyToggle.addEventListener('change', (e) => {
   transparencyLabel.textContent = e.target.checked ? 'On' : 'Off';
 });
 
 function updateSliderFill(slider) {
-  const min = slider.min || 0;
-  const max = slider.max || 100;
-  const val = slider.value;
-  const percent = ((val - min) / (max - min)) * 100;
+  const min = parseFloat(slider.min);
+  const max = parseFloat(slider.max);
+  const val = parseFloat(slider.value);
+  const minVal = Number.isFinite(min) ? min : 0;
+  const maxVal = Number.isFinite(max) ? max : 100;
+  const range = maxVal - minVal;
+  const percent = range === 0 ? 0 : ((val - minVal) / range) * 100;
   slider.style.setProperty('--slider-fill', `${percent}%`);
 }
 
@@ -172,6 +898,7 @@ function updateSliderFill(slider) {
 updateSliderFill(fpsSlider);
 updateSliderFill(colorsSlider);
 updateSliderFill(scaleSlider);
+updateTrimControls();
 
 // Stepper logic
 document.querySelectorAll('.btn-step').forEach(btn => {
@@ -182,8 +909,10 @@ document.querySelectorAll('.btn-step').forEach(btn => {
     if (!slider) return;
 
     const step = parseFloat(slider.step) || 1;
-    const min = parseFloat(slider.min) || 0;
-    const max = parseFloat(slider.max) || 100;
+    const minRaw = parseFloat(slider.min);
+    const maxRaw = parseFloat(slider.max);
+    const min = Number.isFinite(minRaw) ? minRaw : 0;
+    const max = Number.isFinite(maxRaw) ? maxRaw : 100;
     
     let val = parseFloat(slider.value);
     val += dir * step;
@@ -471,9 +1200,7 @@ if (generatePaletteBtn) {
     const paletteName = 'temp_palette.png';
 
     try {
-      const scale = parseInt(scaleSlider.value, 10) / 100;
-      const width = Math.round(state.width * scale);
-      const height = Math.round(state.height * scale);
+      const { width, height } = getOutputDimensions();
       const fps = parseInt(fpsSlider.value, 10);
       const colors = parseInt(colorsSlider.value, 10);
       const trans = transparencyToggle.checked ? 'yes' : 'no';
@@ -483,12 +1210,13 @@ if (generatePaletteBtn) {
       await state.ffmpeg.writeFile(tempInputName, await fetchFile(state.file));
 
       // 2. Prepare filters and execute palettegen
-      const scaleFilter = `scale=${width}:${height}:flags=lanczos`;
       const palettegenOpts = `max_colors=${colors}` + (trans === 'yes' ? ':reserve_transparent=1' : '');
+      const vf = `${buildGifFilterGraph(fps, width, height, 'loop')},palettegen=${palettegenOpts}`;
 
       await state.ffmpeg.exec([
+        ...getTrimInputArgs(),
         '-i', tempInputName,
-        '-vf', `fps=${fps},${scaleFilter},palettegen=${palettegenOpts}`,
+        '-vf', vf,
         '-y', paletteName
       ]);
 
@@ -610,7 +1338,15 @@ async function handleFile(file) {
     workspaceSection.classList.remove('hidden');
     
     dropZone.classList.remove('uploading');
+    resetCrop();
     updateScaleHint();
+    if (trimStartSlider) trimStartSlider.value = 0;
+    if (trimEndSlider) trimEndSlider.value = 0;
+    updateTrimControls();
+    requestAnimationFrame(() => {
+      layoutMediaStage();
+      tryAttachTrimPreview(file);
+    });
     fileInput.value = '';
     
   } catch (err) {
@@ -626,9 +1362,7 @@ convertBtn.addEventListener('click', startConversion);
 async function startConversion() {
   if (!state.ffmpegLoaded || !state.file) return;
 
-  const scale = parseInt(scaleSlider.value, 10) / 100;
-  const width = Math.round(state.width * scale);
-  const height = Math.round(state.height * scale);
+  const { width, height } = getOutputDimensions();
   const fps = parseInt(fpsSlider.value, 10);
   const colors = parseInt(colorsSlider.value, 10);
   const trans = transparencyToggle.checked ? 'yes' : 'no';
@@ -643,7 +1377,26 @@ async function startConversion() {
   // Generate unique conversion ID
   const conversionId = Math.random().toString(36).substring(2, 9) + Date.now().toString(36);
 
-  const settingsData = { scale: scaleSlider.value, fps, colors, trans, dither, ditherText, playback, playbackText, paletteEdited: state.customPaletteEdited, paletteDataUrl: null };
+  const trim = getTrimState();
+  const crop = getCropState();
+  const settingsData = {
+    scale: scaleSlider.value,
+    fps,
+    colors,
+    trans,
+    dither,
+    ditherText,
+    playback,
+    playbackText,
+    cutStart: trim.cutStart,
+    cutEnd: trim.cutEnd,
+    cropLeft: crop.left,
+    cropRight: crop.right,
+    cropTop: crop.top,
+    cropBottom: crop.bottom,
+    paletteEdited: state.customPaletteEdited,
+    paletteDataUrl: null
+  };
   if (state.customPaletteEdited) {
     settingsData.paletteDataUrl = paletteCanvas.toDataURL('image/png');
   }
@@ -719,10 +1472,7 @@ async function startConversion() {
     });
 
     // 3. Prepare filters
-    let filterSource = `fps=${fps},scale=${width}:${height}:flags=lanczos`;
-    if (playback === 'pingpong') {
-      filterSource = `[0:v]split[v1][v2];[v2]reverse[v2r];[v1][v2r]concat=n=2:v=1[merged];[merged]fps=${fps},scale=${width}:${height}:flags=lanczos`;
-    }
+    const filterSource = buildGifFilterGraph(fps, width, height, playback);
 
     const palettegenOpts = `max_colors=${colors}` + (trans === 'yes' ? ':reserve_transparent=1' : '');
     const paletteuseOpts = (trans === 'yes' ? 'alpha_threshold=128:' : '') + `dither=${dither}`;
@@ -734,6 +1484,7 @@ async function startConversion() {
         : ['-vf', `${filterSource},palettegen=${palettegenOpts}`];
 
       await state.ffmpeg.exec([
+        ...getTrimInputArgs(),
         '-i', inputName,
         ...pass1FilterArgs,
         '-y', paletteName
@@ -763,6 +1514,7 @@ async function startConversion() {
     const loopArg = (playback === 'once') ? '-1' : '0';
 
     await state.ffmpeg.exec([
+      ...getTrimInputArgs(),
       '-i', inputName,
       '-i', paletteName,
       '-filter_complex', `${filterSource}[x];[x][1:v]paletteuse=${paletteuseOpts}`,
@@ -854,6 +1606,14 @@ function createResultCard(id, settings) {
     settings.trans === 'yes' ? 'Alpha' : 'No Alpha',
     settings.playbackText || 'Loop'
   ];
+
+  if (settings.cutStart || settings.cutEnd) {
+    badges.push(`Trim −${settings.cutStart || 0}/−${settings.cutEnd || 0}`);
+  }
+
+  if (settings.cropLeft || settings.cropRight || settings.cropTop || settings.cropBottom) {
+    badges.push(`Crop L${settings.cropLeft || 0} R${settings.cropRight || 0} T${settings.cropTop || 0} B${settings.cropBottom || 0}`);
+  }
   
   if (settings.width && settings.height) {
     badges.push(`${settings.width}x${settings.height}`);
@@ -878,6 +1638,19 @@ function createResultCard(id, settings) {
       colorsSlider.dispatchEvent(new Event('input'));
       scaleSlider.value = sData.scale;
       scaleSlider.dispatchEvent(new Event('input'));
+
+      if (trimStartSlider) trimStartSlider.value = sData.cutStart || 0;
+      if (trimEndSlider) trimEndSlider.value = sData.cutEnd || 0;
+      updateTrimControls();
+
+      state.crop = {
+        left: sData.cropLeft || 0,
+        right: sData.cropRight || 0,
+        top: sData.cropTop || 0,
+        bottom: sData.cropBottom || 0
+      };
+      layoutMediaStage();
+      updateCropUI();
       
       transparencyToggle.checked = (sData.trans === 'yes');
       transparencyToggle.dispatchEvent(new Event('change'));
@@ -939,6 +1712,12 @@ closeSessionBtn.addEventListener('click', () => {
   state.durationSeconds = 0;
   state.width = 0;
   state.height = 0;
+  resetCrop();
+
+  clearTrimPreview();
+  if (trimStartSlider) trimStartSlider.value = 0;
+  if (trimEndSlider) trimEndSlider.value = 0;
+  updateTrimControls();
   
   // Explicitly reset the palette for the new video
   state.customPaletteEdited = false;
