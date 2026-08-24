@@ -641,10 +641,17 @@ body::before {
 .media-stage {
   position: relative;
   flex-shrink: 0;
+  padding: 42px 22px;
+  box-sizing: border-box;
+  overflow: hidden;
+  background-color: #eae7e0;
+}
+
+.media-canvas {
+  position: relative;
   width: 100%;
   height: 140px;
   background-color: #eae7e0;
-  overflow: hidden;
 }
 
 .trim-preview-wrap video {
@@ -739,8 +746,17 @@ body::before {
   border-radius: 100px;
 }
 
-.crop-handle[data-edge="n"] { top: 2px; }
-.crop-handle[data-edge="s"] { bottom: 2px; }
+.crop-handle[data-edge="n"] {
+  top: auto;
+  bottom: 100%;
+  margin-bottom: 4px;
+}
+
+.crop-handle[data-edge="s"] {
+  bottom: auto;
+  top: 100%;
+  margin-top: 4px;
+}
 
 .crop-handle[data-edge="e"],
 .crop-handle[data-edge="w"] {
@@ -752,8 +768,17 @@ body::before {
   border-radius: 100px;
 }
 
-.crop-handle[data-edge="w"] { left: 2px; }
-.crop-handle[data-edge="e"] { right: 2px; }
+.crop-handle[data-edge="w"] {
+  left: auto;
+  right: 100%;
+  margin-right: 4px;
+}
+
+.crop-handle[data-edge="e"] {
+  right: auto;
+  left: 100%;
+  margin-left: 4px;
+}
 
 .crop-handle-corner {
   width: 12px;
@@ -762,10 +787,41 @@ body::before {
   background: var(--pastel-mint);
 }
 
-.crop-handle[data-edge="nw"] { top: 2px; left: 2px; cursor: nwse-resize; }
-.crop-handle[data-edge="ne"] { top: 2px; right: 2px; cursor: nesw-resize; }
-.crop-handle[data-edge="sw"] { bottom: 2px; left: 2px; cursor: nesw-resize; }
-.crop-handle[data-edge="se"] { bottom: 2px; right: 2px; cursor: nwse-resize; }
+.crop-handle[data-edge="nw"] {
+  top: auto;
+  left: auto;
+  right: 100%;
+  bottom: 100%;
+  margin: 0 4px 4px 0;
+  cursor: nwse-resize;
+}
+
+.crop-handle[data-edge="ne"] {
+  top: auto;
+  right: auto;
+  left: 100%;
+  bottom: 100%;
+  margin: 0 0 4px 4px;
+  cursor: nesw-resize;
+}
+
+.crop-handle[data-edge="sw"] {
+  bottom: auto;
+  left: auto;
+  right: 100%;
+  top: 100%;
+  margin: 4px 4px 0 0;
+  cursor: nesw-resize;
+}
+
+.crop-handle[data-edge="se"] {
+  bottom: auto;
+  right: auto;
+  left: 100%;
+  top: 100%;
+  margin: 4px 0 0 4px;
+  cursor: nwse-resize;
+}
 
 .crop-handle:hover,
 .crop-handle.is-active {
@@ -775,8 +831,8 @@ body::before {
 
 .crop-edge-label {
   position: absolute;
-  min-width: 18px;
-  padding: 1px 5px;
+  min-width: 22px;
+  padding: 1px 6px;
   border-radius: 100px;
   border: 1.5px solid var(--line-dark);
   background: var(--pastel-pink);
@@ -787,32 +843,58 @@ body::before {
   text-align: center;
   line-height: 1.2;
   box-shadow: 1px 1px 0px var(--line-dark);
-  pointer-events: none;
+  pointer-events: auto;
+  cursor: text;
   z-index: 5;
+  user-select: none;
 }
 
 .crop-edge-label[data-crop-label="left"] {
-  left: 8px;
+  left: auto;
+  right: 100%;
   top: 50%;
-  transform: translateY(-50%);
+  transform: translate(-18px, -50%);
 }
 
 .crop-edge-label[data-crop-label="right"] {
-  right: 8px;
+  right: auto;
+  left: 100%;
   top: 50%;
-  transform: translateY(-50%);
+  transform: translate(18px, -50%);
 }
 
 .crop-edge-label[data-crop-label="top"] {
-  top: 8px;
+  top: auto;
+  bottom: 100%;
   left: 50%;
-  transform: translateX(-50%);
+  transform: translate(-50%, -18px);
 }
 
 .crop-edge-label[data-crop-label="bottom"] {
-  bottom: 8px;
+  bottom: auto;
+  top: 100%;
   left: 50%;
-  transform: translateX(-50%);
+  transform: translate(-50%, 18px);
+}
+
+.crop-edge-input {
+  width: 46px;
+  margin: 0;
+  padding: 0 2px;
+  border: none;
+  outline: none;
+  background: transparent;
+  font: inherit;
+  font-weight: 700;
+  color: inherit;
+  text-align: center;
+  -moz-appearance: textfield;
+}
+
+.crop-edge-input::-webkit-outer-spin-button,
+.crop-edge-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
 }
 
 .crop-meta {

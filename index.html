@@ -245,21 +245,23 @@
 
                 <div id="trim-preview-wrap" class="trim-preview-wrap">
                   <div id="media-stage" class="media-stage">
-                    <video id="trim-preview" muted playsinline preload="metadata"></video>
-                    <div id="crop-overlay" class="crop-overlay">
-                      <div id="crop-rect" class="crop-rect">
-                        <span class="crop-handle" data-edge="n"></span>
-                        <span class="crop-handle" data-edge="s"></span>
-                        <span class="crop-handle" data-edge="e"></span>
-                        <span class="crop-handle" data-edge="w"></span>
-                        <span class="crop-handle crop-handle-corner" data-edge="nw"></span>
-                        <span class="crop-handle crop-handle-corner" data-edge="ne"></span>
-                        <span class="crop-handle crop-handle-corner" data-edge="sw"></span>
-                        <span class="crop-handle crop-handle-corner" data-edge="se"></span>
-                        <span class="crop-edge-label" data-crop-label="left" hidden>0</span>
-                        <span class="crop-edge-label" data-crop-label="right" hidden>0</span>
-                        <span class="crop-edge-label" data-crop-label="top" hidden>0</span>
-                        <span class="crop-edge-label" data-crop-label="bottom" hidden>0</span>
+                    <div id="media-canvas" class="media-canvas">
+                      <video id="trim-preview" muted playsinline preload="metadata"></video>
+                      <div id="crop-overlay" class="crop-overlay">
+                        <div id="crop-rect" class="crop-rect">
+                          <span class="crop-handle" data-edge="n"></span>
+                          <span class="crop-handle" data-edge="s"></span>
+                          <span class="crop-handle" data-edge="e"></span>
+                          <span class="crop-handle" data-edge="w"></span>
+                          <span class="crop-handle crop-handle-corner" data-edge="nw"></span>
+                          <span class="crop-handle crop-handle-corner" data-edge="ne"></span>
+                          <span class="crop-handle crop-handle-corner" data-edge="sw"></span>
+                          <span class="crop-handle crop-handle-corner" data-edge="se"></span>
+                          <button type="button" class="crop-edge-label" data-crop-label="left" title="Double-click to type pixels">0</button>
+                          <button type="button" class="crop-edge-label" data-crop-label="right" title="Double-click to type pixels">0</button>
+                          <button type="button" class="crop-edge-label" data-crop-label="top" title="Double-click to type pixels">0</button>
+                          <button type="button" class="crop-edge-label" data-crop-label="bottom" title="Double-click to type pixels">0</button>
+                        </div>
                       </div>
                     </div>
                     <button type="button" id="trim-preview-play" class="trim-preview-play" aria-label="Play trimmed range">▶</button>

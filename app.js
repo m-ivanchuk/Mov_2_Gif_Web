@@ -63,6 +63,7 @@ const trimPlayhead = document.getElementById('trim-playhead');
 const trimTimelineStart = document.getElementById('trim-timeline-start');
 const trimTimelineEnd = document.getElementById('trim-timeline-end');
 const mediaStage = document.getElementById('media-stage');
+const mediaCanvas = document.getElementById('media-canvas');
 const cropRect = document.getElementById('crop-rect');
 const cropHint = document.getElementById('crop-hint');
 const cropResetBtn = document.getElementById('crop-reset-btn');
@@ -713,12 +714,13 @@ if (trimPreviewPlay) {
 let cropDrag = null;
 
 function layoutMediaStage() {
-  if (!mediaStage || !state.width || !state.height) return;
-  const maxW = (trimPreviewWrap && trimPreviewWrap.clientWidth) ? trimPreviewWrap.clientWidth : 280;
-  const maxH = 240;
+  if (!mediaCanvas || !state.width || !state.height) return;
+  const gutterX = 44;
+  const maxW = Math.max(80, ((trimPreviewWrap && trimPreviewWrap.clientWidth) ? trimPreviewWrap.clientWidth : 280) - gutterX);
+  const maxH = 200;
   const fit = Math.min(maxW / state.width, maxH / state.height);
-  mediaStage.style.width = `${Math.max(1, Math.round(state.width * fit))}px`;
-  mediaStage.style.height = `${Math.max(1, Math.round(state.height * fit))}px`;
+  mediaCanvas.style.width = `${Math.max(1, Math.round(state.width * fit))}px`;
+  mediaCanvas.style.height = `${Math.max(1, Math.round(state.height * fit))}px`;
   updateCropUI();
 }
 
@@ -743,18 +745,13 @@ function updateCropUI() {
   };
   Object.keys(labels).forEach((side) => {
     const el = document.querySelector(`[data-crop-label="${side}"]`);
-    if (!el) return;
-    if (labels[side] > 0) {
-      el.hidden = false;
-      el.textContent = String(labels[side]);
-    } else {
-      el.hidden = true;
-    }
+    if (!el || el.querySelector('input')) return;
+    el.textContent = String(labels[side]);
   });
 
   if (cropHint) {
     if (!crop.active) {
-      cropHint.textContent = `Keeping full frame ${crop.srcW}×${crop.srcH}`;
+      cropHint.textContent = `Keeping full frame ${crop.srcW}×${crop.srcH} · double-click a number to type`;
     } else {
       cropHint.textContent = `Keeping ${crop.w}×${crop.h} of ${crop.srcW}×${crop.srcH} · L${crop.left} R${crop.right} T${crop.top} B${crop.bottom}`;
     }
@@ -821,8 +818,8 @@ function startCropDrag(edge, clientX, clientY, pointerId, target) {
 }
 
 function moveCropDrag(clientX, clientY) {
-  if (!cropDrag || !mediaStage || !state.width || !state.height) return;
-  const rect = mediaStage.getBoundingClientRect();
+  if (!cropDrag || !mediaCanvas || !state.width || !state.height) return;
+  const rect = mediaCanvas.getBoundingClientRect();
   if (rect.width <= 0 || rect.height <= 0) return;
   const dx = ((clientX - cropDrag.startX) / rect.width) * state.width;
   const dy = ((clientY - cropDrag.startY) / rect.height) * state.height;
@@ -862,6 +859,81 @@ if (cropRect) {
 
   cropRect.addEventListener('pointerup', endCropDrag);
   cropRect.addEventListener('pointercancel', endCropDrag);
+
+  cropRect.addEventListener('dblclick', (e) => {
+    const label = e.target.closest('.crop-edge-label');
+    if (!label) return;
+    e.preventDefault();
+    e.stopPropagation();
+    startCropLabelEdit(label.dataset.cropLabel, label);
+  });
+
+  cropRect.addEventListener('click', (e) => {
+    if (e.target.closest('.crop-edge-label')) {
+      e.stopPropagation();
+    }
+  });
+}
+
+const CROP_LABEL_EDGES = { left: 'w', right: 'e', top: 'n', bottom: 's' };
+
+function startCropLabelEdit(side, labelEl) {
+  if (!labelEl || !side || labelEl.querySelector('input')) return;
+  const crop = getCropState();
+  const maxKeep = side === 'left' || side === 'right'
+    ? Math.max(0, crop.srcW - 2 - (side === 'left' ? crop.right : crop.left))
+    : Math.max(0, crop.srcH - 2 - (side === 'top' ? crop.bottom : crop.top));
+
+  const input = document.createElement('input');
+  input.type = 'number';
+  input.min = '0';
+  input.max = String(maxKeep);
+  input.step = '1';
+  input.value = String(crop[side]);
+  input.className = 'crop-edge-input';
+  input.setAttribute('aria-label', `Crop ${side} pixels`);
+
+  labelEl.textContent = '';
+  labelEl.appendChild(input);
+  input.focus();
+  input.select();
+
+  let closed = false;
+  const cancel = () => {
+    if (closed) return;
+    closed = true;
+    updateCropUI();
+  };
+  const commit = () => {
+    if (closed) return;
+    closed = true;
+    const raw = parseInt(input.value, 10);
+    if (!Number.isFinite(raw)) {
+      updateCropUI();
+      return;
+    }
+    const crop = getCropState();
+    applyCropInsets({
+      left: crop.left,
+      right: crop.right,
+      top: crop.top,
+      bottom: crop.bottom,
+      [side]: raw
+    }, CROP_LABEL_EDGES[side]);
+  };
+
+  input.addEventListener('keydown', (e) => {
+    e.stopPropagation();
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      input.blur();
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      cancel();
+    }
+  });
+  input.addEventListener('pointerdown', (e) => e.stopPropagation());
+  input.addEventListener('blur', commit);
 }
 
 window.addEventListener('pointermove', (e) => {
