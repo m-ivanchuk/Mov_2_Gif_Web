@@ -116,331 +116,339 @@
     </div>
 
     <main id="app-content" class="app-main hidden">
-      <!-- Step 1: Upload -->
-      <section id="upload-section" class="card visible">
-        <div id="drop-zone" class="drop-zone">
-          <!-- Sparkles & dots decorating the drop zone -->
-          <div class="sparkle sparkle-top-left" aria-hidden="true">✦</div>
-          <div class="sparkle sparkle-top-right" aria-hidden="true">✧</div>
-          <div class="sparkle sparkle-bottom-left" aria-hidden="true">✧</div>
-          <div class="sparkle sparkle-bottom-right" aria-hidden="true">✦</div>
-          <div class="dot-decor dot-1" aria-hidden="true"></div>
-          <div class="dot-decor dot-2" aria-hidden="true"></div>
-          <div class="dot-decor dot-3" aria-hidden="true"></div>
-
-          <div class="drop-zone-icon-container" aria-hidden="true">
-            <!-- Cute Marshmallow/Cat SVG -->
-            <svg class="kawaii-marshmallow" width="130" height="130" viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <rect x="35" y="35" width="50" height="55" rx="16" fill="#ffffff" stroke="#2f2d29" stroke-width="3.5" />
-              <!-- Ears -->
-              <path d="M38 36 L24 21 C31 20 40 27 45 35 Z" fill="#ffffff" stroke="#2f2d29" stroke-width="3.5" stroke-linejoin="round" />
-              <path d="M36 34 L28 25 C32 24 37 28 39 34 Z" fill="#ffdbe0" />
-              <path d="M82 36 L96 21 C89 20 80 27 75 35 Z" fill="#ffffff" stroke="#2f2d29" stroke-width="3.5" stroke-linejoin="round" />
-              <path d="M84 34 L92 25 C88 24 83 28 81 34 Z" fill="#ffdbe0" />
-              <!-- Green Bow -->
-              <path d="M84 38C82 35 76 35 74 38C73 40 76 45 80 43C84 45 87 40 86 38Z" fill="#cbeee4" stroke="#2f2d29" stroke-width="2" />
-              <circle cx="80" cy="39" r="3" fill="#2f2d29" />
-              <!-- Whiskers -->
-              <path d="M38 59L22 57" stroke="#2f2d29" stroke-width="2.5" stroke-linecap="round" />
-              <path d="M36 63L20 63" stroke="#2f2d29" stroke-width="2.5" stroke-linecap="round" />
-              <path d="M38 67L24 70" stroke="#2f2d29" stroke-width="2.5" stroke-linecap="round" />
-              <path d="M82 59L98 57" stroke="#2f2d29" stroke-width="2.5" stroke-linecap="round" />
-              <path d="M84 63L100 63" stroke="#2f2d29" stroke-width="2.5" stroke-linecap="round" />
-              <path d="M82 67L96 70" stroke="#2f2d29" stroke-width="2.5" stroke-linecap="round" />
-              <!-- Face -->
-              <path d="M48 57C50 55 52 55 54 57" stroke="#2f2d29" stroke-width="2.5" stroke-linecap="round" />
-              <path d="M66 57C68 55 70 55 72 57" stroke="#2f2d29" stroke-width="2.5" stroke-linecap="round" />
-              <path d="M58 64C59 65.5 61 65.5 62 64C63 65.5 65 65.5 66 64" stroke="#2f2d29" stroke-width="2" stroke-linecap="round" />
-              <ellipse cx="44" cy="62" rx="4" ry="3" fill="#ffdbe0" />
-              <ellipse cx="76" cy="62" rx="4" ry="3" fill="#ffdbe0" />
-              <!-- Little Hands/Feet -->
-              <path d="M34 68C31 68 31 71 34 71" stroke="#2f2d29" stroke-width="3.5" stroke-linecap="round" fill="#ffffff" />
-              <path d="M86 68C89 68 89 71 86 71" stroke="#2f2d29" stroke-width="3.5" stroke-linecap="round" fill="#ffffff" />
-              <path d="M48 90C48 94 44 96 41 94C39 92 42 90 44 90" stroke="#2f2d29" stroke-width="3" stroke-linecap="round" fill="#ffffff" />
-              <path d="M72 90C72 94 76 96 79 94C81 92 78 90 76 90" stroke="#2f2d29" stroke-width="3" stroke-linecap="round" fill="#ffffff" />
-            </svg>
-          </div>
-          
-          <p class="drop-zone-title">Drop your video here</p>
-          <p class="drop-zone-subtitle">or <button type="button" class="btn-browse-link" id="browse-btn" style="background: none; border: none; padding: 6px 10px; font: inherit; color: inherit; text-decoration: underline; cursor: pointer; display: inline-block; line-height: 1.2;">click to browse</button></p>
-          
-          <div class="format-badges" aria-hidden="true">
-            <span class="format-badge format-mov">MOV</span>
-            <span class="format-badge format-mp4">MP4</span>
-            <span class="format-badge format-webm">WEBM</span>
-            <span class="format-badge format-avi">AVI</span>
-          </div>
-          
-          <p class="drop-zone-hint-text" aria-hidden="true">Sliders appear on file hover</p>
-          <input type="file" id="file-input" accept=".mov,.mp4,.webm,.avi,.mkv" hidden>
+      <!-- Workspace with Multi-Project Tabs -->
+      <section id="workspace-section" class="workspace-shell">
+        <div class="project-tabs-bar">
+          <div id="project-tablist" class="project-tablist" role="tablist" aria-label="Video projects"></div>
+          <button type="button" id="add-project-btn" class="project-add-btn" title="Open a new empty project tab">
+            <span aria-hidden="true">＋</span>
+            <span>New Project</span>
+          </button>
         </div>
-      </section>
+        <input type="file" id="file-input" accept=".mov,.mp4,.webm,.avi,.mkv" multiple hidden>
 
-      <!-- Step 2: Workspace -->
-      <section id="workspace-section" class="workspace hidden">
-        <div class="workspace-controls">
-          <!-- Standalone Side Palette Editor Card -->
-          <div id="palette-editor-card" class="card palette-card-standalone">
-            <h3 class="card-title">✿ Palette Editor ✿</h3>
-            <button type="button" id="generate-palette-btn" class="btn-secondary-cute full-width">
-              Load & Edit Colors
-            </button>
-            <div id="palette-grid-container" class="palette-grid-container hidden">
-              <div id="palette-grid" class="palette-grid"></div>
-              <p class="palette-hint-text">Click any color to edit, changes apply to next renders</p>
-            </div>
-            <!-- Floating Color Picker Panel -->
-            <div id="palette-floating-picker" class="palette-floating-picker hidden">
-              <div class="picker-header">
-                <span class="picker-title">✿ Pick Color ✿</span>
-                <button type="button" id="picker-close-btn" class="btn-change-small">✕</button>
-              </div>
-              <canvas id="picker-sv-canvas" width="200" height="200"></canvas>
-              <input type="range" id="picker-hue-slider" min="0" max="360" value="0" class="slider slider-pink" style="height: 12px; margin-top: 4px;">
-              <div class="picker-footer">
-                <div id="picker-preview" class="picker-preview"></div>
-                <input type="text" id="picker-hex-input" class="select picker-hex-input" maxlength="7">
-                <button type="button" id="picker-apply-btn" class="btn-secondary-cute picker-apply-btn">Apply</button>
-              </div>
-            </div>
-            <canvas id="palette-canvas" style="display:none"></canvas>
-          </div>
+        <div id="workspace-panel" class="workspace" role="tabpanel">
+          <!-- Left 2 Columns: Video Stage (top) + Conversion Settings (bottom) -->
+          <div class="workspace-editor">
+            <!-- Video Stage Card: Inline Dropzone OR Loaded Video + Trim & Crop -->
+            <section class="card video-stage-card" aria-label="Video source, trim and crop">
+              <!-- Inline Dropzone (shown when active project has no video yet) -->
+              <div id="drop-zone" class="drop-zone drop-zone-inline" role="button" tabindex="0" aria-label="Add a video to this project">
+                <div class="sparkle sparkle-top-left" aria-hidden="true">✦</div>
+                <div class="sparkle sparkle-top-right" aria-hidden="true">✧</div>
+                <div class="sparkle sparkle-bottom-left" aria-hidden="true">✧</div>
+                <div class="sparkle sparkle-bottom-right" aria-hidden="true">✦</div>
 
-          <!-- Left Sidebar: Settings -->
-          <aside class="workspace-sidebar card">
-            <!-- File info styled like a cute ticket -->
-            <div class="file-info">
-              <div class="file-info-details">
-                <div class="file-icon">
-                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                    <rect x="2" y="2" width="20" height="20" rx="5" fill="#fef0be" stroke="#2f2d29" stroke-width="2.5"></rect>
-                    <circle cx="12" cy="12" r="3" fill="#ffffff" stroke="#2f2d29" stroke-width="2.5"></circle>
+                <div class="drop-zone-icon-container" aria-hidden="true">
+                  <!-- Cute Marshmallow/Cat SVG -->
+                  <svg class="kawaii-marshmallow" width="104" height="104" viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <rect x="35" y="35" width="50" height="55" rx="16" fill="#ffffff" stroke="#2f2d29" stroke-width="3.5" />
+                    <!-- Ears -->
+                    <path d="M38 36 L24 21 C31 20 40 27 45 35 Z" fill="#ffffff" stroke="#2f2d29" stroke-width="3.5" stroke-linejoin="round" />
+                    <path d="M36 34 L28 25 C32 24 37 28 39 34 Z" fill="#ffdbe0" />
+                    <path d="M82 36 L96 21 C89 20 80 27 75 35 Z" fill="#ffffff" stroke="#2f2d29" stroke-width="3.5" stroke-linejoin="round" />
+                    <path d="M84 34 L92 25 C88 24 83 28 81 34 Z" fill="#ffdbe0" />
+                    <!-- Green Bow -->
+                    <path d="M84 38C82 35 76 35 74 38C73 40 76 45 80 43C84 45 87 40 86 38Z" fill="#cbeee4" stroke="#2f2d29" stroke-width="2" />
+                    <circle cx="80" cy="39" r="3" fill="#2f2d29" />
+                    <!-- Whiskers -->
+                    <path d="M38 59L22 57" stroke="#2f2d29" stroke-width="2.5" stroke-linecap="round" />
+                    <path d="M36 63L20 63" stroke="#2f2d29" stroke-width="2.5" stroke-linecap="round" />
+                    <path d="M38 67L24 70" stroke="#2f2d29" stroke-width="2.5" stroke-linecap="round" />
+                    <path d="M82 59L98 57" stroke="#2f2d29" stroke-width="2.5" stroke-linecap="round" />
+                    <path d="M84 63L100 63" stroke="#2f2d29" stroke-width="2.5" stroke-linecap="round" />
+                    <path d="M82 67L96 70" stroke="#2f2d29" stroke-width="2.5" stroke-linecap="round" />
+                    <!-- Face -->
+                    <path d="M48 57C50 55 52 55 54 57" stroke="#2f2d29" stroke-width="2.5" stroke-linecap="round" />
+                    <path d="M66 57C68 55 70 55 72 57" stroke="#2f2d29" stroke-width="2.5" stroke-linecap="round" />
+                    <path d="M58 64C59 65.5 61 65.5 62 64C63 65.5 65 65.5 66 64" stroke="#2f2d29" stroke-width="2" stroke-linecap="round" />
+                    <ellipse cx="44" cy="62" rx="4" ry="3" fill="#ffdbe0" />
+                    <ellipse cx="76" cy="62" rx="4" ry="3" fill="#ffdbe0" />
+                    <!-- Little Hands/Feet -->
+                    <path d="M34 68C31 68 31 71 34 71" stroke="#2f2d29" stroke-width="3.5" stroke-linecap="round" fill="#ffffff" />
+                    <path d="M86 68C89 68 89 71 86 71" stroke="#2f2d29" stroke-width="3.5" stroke-linecap="round" fill="#ffffff" />
+                    <path d="M48 90C48 94 44 96 41 94C39 92 42 90 44 90" stroke="#2f2d29" stroke-width="3" stroke-linecap="round" fill="#ffffff" />
+                    <path d="M72 90C72 94 76 96 79 94C81 92 78 90 76 90" stroke="#2f2d29" stroke-width="3" stroke-linecap="round" fill="#ffffff" />
                   </svg>
                 </div>
-                <div class="file-meta">
-                  <span id="file-name" class="file-name">video.mov</span>
-                  <span class="file-stats">
-                    <span id="file-size">—</span>
-                    <span class="dot-sep">•</span>
-                    <span id="file-duration">—</span>
-                    <span class="dot-sep">•</span>
-                    <span id="file-dimensions">—</span>
-                  </span>
+
+                <p class="drop-zone-title">Drop your video here</p>
+                <p class="drop-zone-subtitle">or <button type="button" class="btn-browse-link" id="browse-btn">click to browse</button></p>
+
+                <div class="format-badges" aria-hidden="true">
+                  <span class="format-badge format-mov">MOV</span>
+                  <span class="format-badge format-mp4">MP4</span>
+                  <span class="format-badge format-webm">WEBM</span>
+                  <span class="format-badge format-avi">AVI</span>
                 </div>
+
+                <p class="drop-zone-hint-text">You can add more videos in new tabs anytime ✨</p>
               </div>
-              <button id="close-session-btn" class="btn-change" aria-label="Close session" title="Clear session">
-                ✕
-              </button>
-            </div>
 
-            <h2 class="card-title">✿ Conversion Settings ✿</h2>
-            
-            <div class="settings-grid">
-              <!-- Trim & crop: keep-range on the timeline, crop rectangle on the frame -->
-              <div class="trim-box full-width">
-                <div class="slider-header">
-                  <span class="slider-label">Trim & Crop</span>
-                  <span class="value-badge badge-blue" id="trim-kept-badge">All</span>
+              <!-- Loaded Video Header + Spacious Trim & Crop -->
+              <div id="project-media-stage" class="project-media-stage hidden">
+                <div id="project-file-bar" class="file-info">
+                  <div class="file-info-details">
+                    <div class="file-icon">
+                      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                        <rect x="2" y="2" width="20" height="20" rx="5" fill="#fef0be" stroke="#2f2d29" stroke-width="2.5"></rect>
+                        <circle cx="12" cy="12" r="3" fill="#ffffff" stroke="#2f2d29" stroke-width="2.5"></circle>
+                      </svg>
+                    </div>
+                    <div class="file-meta">
+                      <span id="file-name" class="file-name">video.mov</span>
+                      <span class="file-stats">
+                        <span id="file-size">—</span>
+                        <span class="dot-sep">•</span>
+                        <span id="file-duration">—</span>
+                        <span class="dot-sep">•</span>
+                        <span id="file-dimensions">—</span>
+                      </span>
+                    </div>
+                  </div>
+                  <button type="button" id="replace-video-btn" class="btn-replace-video" aria-label="Replace video in this project" title="Replace video in this project">
+                    ↻
+                  </button>
                 </div>
 
-                <div id="trim-preview-wrap" class="trim-preview-wrap">
-                  <div id="media-stage" class="media-stage">
-                    <div id="media-canvas" class="media-canvas">
-                      <video id="trim-preview" muted playsinline preload="metadata"></video>
-                      <div id="crop-overlay" class="crop-overlay">
-                        <div id="crop-rect" class="crop-rect">
-                          <span class="crop-handle" data-edge="n"></span>
-                          <span class="crop-handle" data-edge="s"></span>
-                          <span class="crop-handle" data-edge="e"></span>
-                          <span class="crop-handle" data-edge="w"></span>
-                          <span class="crop-handle crop-handle-corner" data-edge="nw"></span>
-                          <span class="crop-handle crop-handle-corner" data-edge="ne"></span>
-                          <span class="crop-handle crop-handle-corner" data-edge="sw"></span>
-                          <span class="crop-handle crop-handle-corner" data-edge="se"></span>
-                          <button type="button" class="crop-edge-label" data-crop-label="left" title="Double-click to type pixels">0</button>
-                          <button type="button" class="crop-edge-label" data-crop-label="right" title="Double-click to type pixels">0</button>
-                          <button type="button" class="crop-edge-label" data-crop-label="top" title="Double-click to type pixels">0</button>
-                          <button type="button" class="crop-edge-label" data-crop-label="bottom" title="Double-click to type pixels">0</button>
+                <!-- Trim & crop: keep-range on the timeline, crop rectangle on the frame -->
+                <div id="trim-crop-box" class="trim-box">
+                  <div class="slider-header">
+                    <span class="slider-label">Trim &amp; Crop</span>
+                    <span class="value-badge badge-blue" id="trim-kept-badge">All</span>
+                  </div>
+
+                  <div id="trim-preview-wrap" class="trim-preview-wrap">
+                    <div id="media-stage" class="media-stage">
+                      <div id="media-canvas" class="media-canvas">
+                        <video id="trim-preview" muted playsinline preload="metadata"></video>
+                        <div id="crop-overlay" class="crop-overlay">
+                          <div id="crop-rect" class="crop-rect">
+                            <span class="crop-handle" data-edge="n"></span>
+                            <span class="crop-handle" data-edge="s"></span>
+                            <span class="crop-handle" data-edge="e"></span>
+                            <span class="crop-handle" data-edge="w"></span>
+                            <span class="crop-handle crop-handle-corner" data-edge="nw"></span>
+                            <span class="crop-handle crop-handle-corner" data-edge="ne"></span>
+                            <span class="crop-handle crop-handle-corner" data-edge="sw"></span>
+                            <span class="crop-handle crop-handle-corner" data-edge="se"></span>
+                            <button type="button" class="crop-edge-label" data-crop-label="left" title="Double-click to type pixels">0</button>
+                            <button type="button" class="crop-edge-label" data-crop-label="right" title="Double-click to type pixels">0</button>
+                            <button type="button" class="crop-edge-label" data-crop-label="top" title="Double-click to type pixels">0</button>
+                            <button type="button" class="crop-edge-label" data-crop-label="bottom" title="Double-click to type pixels">0</button>
+                          </div>
                         </div>
                       </div>
+                      <button type="button" id="trim-preview-play" class="trim-preview-play" aria-label="Play trimmed range">▶</button>
                     </div>
-                    <button type="button" id="trim-preview-play" class="trim-preview-play" aria-label="Play trimmed range">▶</button>
                   </div>
-                </div>
-                <p id="trim-preview-fallback" class="trim-fallback">No browser preview for this file — trim by frame count, then check the GIF.</p>
-                <p id="trim-frame-label" class="trim-frame-label">Move a handle to scrub the keep range</p>
-                <div class="crop-meta">
-                  <span class="hint" id="crop-hint">Keeping full frame</span>
-                  <button type="button" id="crop-reset-btn" class="btn-secondary-cute crop-reset-btn hidden">Reset crop</button>
-                </div>
+                  <p id="trim-preview-fallback" class="trim-fallback">No browser preview for this file — trim by frame count, then check the GIF.</p>
+                  <p id="trim-frame-label" class="trim-frame-label">Move a handle to scrub the keep range</p>
+                  <div class="crop-meta">
+                    <span class="hint" id="crop-hint">Keeping full frame</span>
+                    <button type="button" id="crop-reset-btn" class="btn-secondary-cute crop-reset-btn hidden">Reset crop</button>
+                  </div>
 
-                <div class="trim-range-header">
-                  <div class="stepper-control" title="Start of kept range">
-                    <button type="button" class="btn-step" data-trim-nudge="start" data-dir="-1" aria-label="Nudge start left">−</button>
-                    <span class="value-badge badge-mint" id="trim-start-value">0:00.0</span>
-                    <button type="button" class="btn-step" data-trim-nudge="start" data-dir="1" aria-label="Nudge start right">+</button>
-                  </div>
-                  <div class="stepper-control" title="End of kept range">
-                    <button type="button" class="btn-step" data-trim-nudge="end" data-dir="-1" aria-label="Nudge end left">−</button>
-                    <span class="value-badge badge-pink" id="trim-end-value">0:00.0</span>
-                    <button type="button" class="btn-step" data-trim-nudge="end" data-dir="1" aria-label="Nudge end right">+</button>
-                  </div>
-                </div>
-
-                <div class="trim-range" id="trim-range">
-                  <div class="trim-range-axis" id="trim-range-axis">
-                    <div class="trim-range-track">
-                      <div class="trim-range-keep" id="trim-range-keep"></div>
+                  <div class="trim-range-header">
+                    <div class="stepper-control" title="Start of kept range">
+                      <button type="button" class="btn-step" data-trim-nudge="start" data-dir="-1" aria-label="Nudge start left">−</button>
+                      <span class="value-badge badge-mint" id="trim-start-value">0:00.0</span>
+                      <button type="button" class="btn-step" data-trim-nudge="start" data-dir="1" aria-label="Nudge start right">+</button>
                     </div>
-                    <div class="trim-playhead hidden" id="trim-playhead"></div>
-                    <button type="button" class="trim-thumb trim-thumb-start" id="trim-thumb-start" role="slider" aria-label="Trim start"></button>
-                    <button type="button" class="trim-thumb trim-thumb-end" id="trim-thumb-end" role="slider" aria-label="Trim end"></button>
+                    <div class="stepper-control" title="End of kept range">
+                      <button type="button" class="btn-step" data-trim-nudge="end" data-dir="-1" aria-label="Nudge end left">−</button>
+                      <span class="value-badge badge-pink" id="trim-end-value">0:00.0</span>
+                      <button type="button" class="btn-step" data-trim-nudge="end" data-dir="1" aria-label="Nudge end right">+</button>
+                    </div>
+                  </div>
+
+                  <div class="trim-range" id="trim-range">
+                    <div class="trim-range-axis" id="trim-range-axis">
+                      <div class="trim-range-track">
+                        <div class="trim-range-keep" id="trim-range-keep"></div>
+                      </div>
+                      <div class="trim-playhead hidden" id="trim-playhead"></div>
+                      <button type="button" class="trim-thumb trim-thumb-start" id="trim-thumb-start" role="slider" aria-label="Trim start"></button>
+                      <button type="button" class="trim-thumb trim-thumb-end" id="trim-thumb-end" role="slider" aria-label="Trim end"></button>
+                    </div>
+                  </div>
+
+                  <div class="slider-footer">
+                    <span id="trim-timeline-start">0:00.0</span>
+                    <span id="trim-timeline-end">0:00.0</span>
+                  </div>
+
+                  <input type="range" id="trim-start" min="0" max="0" value="0" step="1" class="hidden" tabindex="-1" aria-hidden="true">
+                  <input type="range" id="trim-end" min="0" max="0" value="0" step="1" class="hidden" tabindex="-1" aria-hidden="true">
+
+                  <span class="hint" id="trim-hint">Keeping all frames</span>
+                </div>
+              </div>
+            </section>
+
+            <!-- Conversion Settings Card (2-column layout below video) -->
+            <aside class="workspace-sidebar card">
+              <div class="settings-header-row">
+                <h2 class="card-title">✿ Conversion Settings ✿</h2>
+                <div class="settings-header-actions">
+                  <button type="button" id="open-palette-btn" class="btn-mini-pill btn-mini-pill-pink" command="show-modal" commandfor="palette-dialog">
+                    <span aria-hidden="true">🎨</span>
+                    <span>Palette</span>
+                    <span id="palette-btn-dot" class="palette-btn-dot hidden" aria-hidden="true"></span>
+                  </button>
+                  <button type="button" id="copy-settings-from-btn" class="btn-mini-pill" popovertarget="copy-settings-popover">
+                    ⇄ Copy from…
+                  </button>
+                </div>
+              </div>
+              <div id="copy-settings-popover" popover="auto" class="kawaii-popover anchored-overlay"></div>
+
+              <div class="settings-grid-two-col">
+                <div class="settings-col-sliders">
+                  <!-- Symmetrical FPS Slider -->
+                  <div class="kawaii-slider-group" data-hint-target="hint-fps">
+                    <div class="slider-header">
+                      <label for="fps" class="slider-label">FPS</label>
+                      <div class="stepper-control">
+                        <button type="button" class="btn-step" data-target="fps" data-dir="-1">−</button>
+                        <span class="value-badge badge-mint" id="fps-value">12</span>
+                        <button type="button" class="btn-step" data-target="fps" data-dir="1">+</button>
+                      </div>
+                    </div>
+                    <div class="slider-container">
+                      <input type="range" id="fps" min="1" max="60" value="12" class="slider slider-mint" aria-describedby="hint-fps">
+                    </div>
+                    <div class="slider-footer">
+                      <span>1</span>
+                      <span>60</span>
+                    </div>
+                    <div id="hint-fps" popover="hint" role="tooltip" class="kawaii-tooltip">10–15 FPS is ideal for web GIFs. Higher values (30–60 FPS) look smoother but dramatically increase file size.</div>
+                  </div>
+
+                  <!-- Symmetrical Scale Slider -->
+                  <div class="kawaii-slider-group" data-hint-target="hint-scale">
+                    <div class="slider-header">
+                      <label for="scale" class="slider-label">Scale</label>
+                      <div class="stepper-control">
+                        <button type="button" class="btn-step" data-target="scale" data-dir="-1">−</button>
+                        <span class="value-badge badge-pink" id="scale-value">100%</span>
+                        <button type="button" class="btn-step" data-target="scale" data-dir="1">+</button>
+                      </div>
+                    </div>
+                    <div class="slider-container">
+                      <input type="range" id="scale" min="10" max="100" step="5" value="100" class="slider slider-pink" aria-describedby="hint-scale">
+                    </div>
+                    <div class="slider-footer">
+                      <span>10%</span>
+                      <span>100%</span>
+                    </div>
+                    <span class="hint" id="scale-hint">Output size: —</span>
+                    <div id="hint-scale" popover="hint" role="tooltip" class="kawaii-tooltip">Biggest lever for shrinking file size: lowering scale to 50% reduces pixel count by 4× without hurting motion smoothness.</div>
+                  </div>
+
+                  <!-- Symmetrical Max Colors Slider -->
+                  <div class="kawaii-slider-group" data-hint-target="hint-colors">
+                    <div class="slider-header">
+                      <label for="colors" class="slider-label">Colors</label>
+                      <div class="stepper-control">
+                        <button type="button" class="btn-step" data-target="colors" data-dir="-1">−</button>
+                        <span class="value-badge badge-yellow" id="colors-value">64</span>
+                        <button type="button" class="btn-step" data-target="colors" data-dir="1">+</button>
+                      </div>
+                    </div>
+                    <div class="slider-container">
+                      <input type="range" id="colors" min="4" max="256" value="64" class="slider slider-yellow" aria-describedby="hint-colors">
+                    </div>
+                    <div class="slider-footer">
+                      <span>4</span>
+                      <span>256</span>
+                    </div>
+                    <div id="hint-colors" popover="hint" role="tooltip" class="kawaii-tooltip">Maximum palette size (GIF allows up to 256). Use 32–64 for lightweight UI/clips, or 128–256 for smooth photos and gradients.</div>
                   </div>
                 </div>
 
-                <div class="slider-footer">
-                  <span id="trim-timeline-start">0:00.0</span>
-                  <span id="trim-timeline-end">0:00.0</span>
-                </div>
+                <div class="settings-col-options">
+                  <!-- Transparency, Dither, & Playback (Kawaii Pill Box) -->
+                  <div class="kawaii-pill-box">
+                    <div class="setting-group" data-hint-target="hint-dither">
+                      <label for="dither" class="kawaii-label">Dithering</label>
+                      <select id="dither" class="select" aria-describedby="hint-dither">
+                        <option value="floyd_steinberg" selected>Floyd-Steinberg</option>
+                        <option value="bayer">Bayer Matrix</option>
+                        <option value="sierra2_4a">Sierra Lite</option>
+                        <option value="heckbert">Heckbert Color</option>
+                        <option value="none">No Dither</option>
+                      </select>
+                      <div id="hint-dither" popover="hint" role="tooltip" class="kawaii-tooltip">Simulates missing shades with dot patterns. Floyd-Steinberg is smoothest for gradients; "No Dither" produces the smallest files for flat UI or pixel art.</div>
+                    </div>
 
-                <input type="range" id="trim-start" min="0" max="0" value="0" step="1" class="hidden" tabindex="-1" aria-hidden="true">
-                <input type="range" id="trim-end" min="0" max="0" value="0" step="1" class="hidden" tabindex="-1" aria-hidden="true">
+                    <div class="setting-group" data-hint-target="hint-playback">
+                      <label for="playback" class="kawaii-label">Playback</label>
+                      <select id="playback" class="select" aria-describedby="hint-playback">
+                        <option value="loop" selected>Infinite Loop</option>
+                        <option value="once">Play Once</option>
+                        <option value="pingpong">Ping Pong</option>
+                      </select>
+                      <div id="hint-playback" popover="hint" role="tooltip" class="kawaii-tooltip">Infinite Loop repeats forever; Play Once stops on the last frame; Ping Pong plays forward then backward (~2× frames and size).</div>
+                    </div>
 
-                <span class="hint" id="trim-hint">Keeping all frames</span>
-              </div>
+                    <div class="setting-group" data-hint-target="hint-transparency">
+                      <label class="kawaii-label">Transparency</label>
+                      <label class="toggle">
+                        <input type="checkbox" id="transparency" autocomplete="off" aria-describedby="hint-transparency">
+                        <span class="toggle-slider"></span>
+                        <span class="toggle-label" id="transparency-label">Off</span>
+                      </label>
+                      <div id="hint-transparency" popover="hint" role="tooltip" class="kawaii-tooltip">Preserves transparent pixels from source videos with an alpha channel, reserving 1 slot in the color palette.</div>
+                    </div>
 
-              <!-- Symmetrical FPS Slider -->
-              <div class="kawaii-slider-group full-width">
-                <div class="slider-header">
-                  <label for="fps" class="slider-label">FPS</label>
-                  <div class="stepper-control">
-                    <button type="button" class="btn-step" data-target="fps" data-dir="-1">−</button>
-                    <span class="value-badge badge-mint" id="fps-value">12</span>
-                    <button type="button" class="btn-step" data-target="fps" data-dir="1">+</button>
+                    <div class="setting-group" data-hint-target="hint-denoise">
+                      <label class="kawaii-label">Denoise</label>
+                      <label class="toggle">
+                        <input type="checkbox" id="denoise" autocomplete="off" aria-describedby="hint-denoise">
+                        <span class="toggle-slider"></span>
+                        <span class="toggle-label" id="denoise-label">Off</span>
+                      </label>
+                      <div id="hint-denoise" popover="hint" role="tooltip" class="kawaii-tooltip">Smooths grain and codec noise before quantizing (hqdn3d). Helps noisy camera footage, but on clean UI or games it blurs edges into gradients and can increase GIF size.</div>
+                    </div>
+
+                    <div class="setting-group" data-hint-target="hint-drop-dupes">
+                      <label class="kawaii-label">Drop dupes</label>
+                      <label class="toggle">
+                        <input type="checkbox" id="drop-dupes" autocomplete="off" aria-describedby="hint-drop-dupes">
+                        <span class="toggle-slider"></span>
+                        <span class="toggle-label" id="drop-dupes-label">Off</span>
+                      </label>
+                      <div id="hint-drop-dupes" popover="hint" role="tooltip" class="kawaii-tooltip">Drops identical still frames (mpdecimate) and extends the delay on middle pauses. Since GIF already diffs static pixels, savings are modest and trailing pauses at the very end may shorten.</div>
+                    </div>
+
+                    <div class="setting-group" data-hint-target="hint-diff-rect">
+                      <label class="kawaii-label">Diff rectangle</label>
+                      <label class="toggle">
+                        <input type="checkbox" id="diff-rect" autocomplete="off" aria-describedby="hint-diff-rect">
+                        <span class="toggle-slider"></span>
+                        <span class="toggle-label" id="diff-rect-label">Off</span>
+                      </label>
+                      <div id="hint-diff-rect" popover="hint" role="tooltip" class="kawaii-tooltip">Restricts dithering updates to the changed bounding box (diff_mode=rectangle). FFmpeg already crops unchanged pixels by default, so this rarely shrinks clean clips and can add a few KB.</div>
+                    </div>
+                  </div>
+
+                  <!-- Dither Mascot Pet Card -->
+                  <div id="dither-pet-card" class="dither-pet-card">
+                    <div class="dither-pet-bubble">
+                      <span id="dither-pet-text">Loading my buddy...</span>
+                    </div>
+                    <div class="dither-pet-character" id="dither-pet-visual"></div>
                   </div>
                 </div>
-                <div class="slider-container">
-                  <input type="range" id="fps" min="1" max="60" value="12" class="slider slider-mint">
-                </div>
-                <div class="slider-footer">
-                  <span>1</span>
-                  <span>60</span>
-                </div>
               </div>
 
-              <!-- Symmetrical Scale Slider -->
-              <div class="kawaii-slider-group full-width">
-                <div class="slider-header">
-                  <label for="scale" class="slider-label">Scale</label>
-                  <div class="stepper-control">
-                    <button type="button" class="btn-step" data-target="scale" data-dir="-1">−</button>
-                    <span class="value-badge badge-pink" id="scale-value">100%</span>
-                    <button type="button" class="btn-step" data-target="scale" data-dir="1">+</button>
-                  </div>
-                </div>
-                <div class="slider-container">
-                  <input type="range" id="scale" min="10" max="100" step="5" value="100" class="slider slider-pink">
-                </div>
-                <div class="slider-footer">
-                  <span>10%</span>
-                  <span>100%</span>
-                </div>
-                <span class="hint" id="scale-hint">Output size: —</span>
-              </div>
-
-              <!-- Symmetrical Max Colors Slider -->
-              <div class="kawaii-slider-group full-width">
-                <div class="slider-header">
-                  <label for="colors" class="slider-label">Colors</label>
-                  <div class="stepper-control">
-                    <button type="button" class="btn-step" data-target="colors" data-dir="-1">−</button>
-                    <span class="value-badge badge-yellow" id="colors-value">64</span>
-                    <button type="button" class="btn-step" data-target="colors" data-dir="1">+</button>
-                  </div>
-                </div>
-                <div class="slider-container">
-                  <input type="range" id="colors" min="4" max="256" value="64" class="slider slider-yellow">
-                </div>
-                <div class="slider-footer">
-                  <span>4</span>
-                  <span>256</span>
-                </div>
-              </div>
-
-              <!-- Transparency, Dither, & Playback (Kawaii Pill Box) -->
-              <div class="kawaii-pill-box full-width">
-                <div class="setting-group">
-                  <label class="kawaii-label">Transparency</label>
-                  <label class="toggle">
-                    <input type="checkbox" id="transparency" autocomplete="off">
-                    <span class="toggle-slider"></span>
-                    <span class="toggle-label" id="transparency-label">Off</span>
-                  </label>
-                </div>
-
-                <div class="setting-group">
-                  <label for="dither" class="kawaii-label">Dithering</label>
-                  <select id="dither" class="select">
-                    <option value="floyd_steinberg" selected>Floyd-Steinberg</option>
-                    <option value="bayer">Bayer Matrix</option>
-                    <option value="sierra2_4a">Sierra Lite</option>
-                    <option value="heckbert">Heckbert Color</option>
-                    <option value="none">No Dither</option>
-                  </select>
-                </div>
-
-                <div class="setting-group">
-                  <label for="playback" class="kawaii-label">Playback</label>
-                  <select id="playback" class="select">
-                    <option value="loop" selected>Infinite Loop</option>
-                    <option value="once">Play Once</option>
-                    <option value="pingpong">Ping Pong</option>
-                  </select>
-                </div>
-
-                <div class="setting-group">
-                  <label class="kawaii-label">Denoise</label>
-                  <label class="toggle">
-                    <input type="checkbox" id="denoise" autocomplete="off">
-                    <span class="toggle-slider"></span>
-                    <span class="toggle-label" id="denoise-label">Off</span>
-                  </label>
-                </div>
-
-                <div class="setting-group">
-                  <label class="kawaii-label">Drop dupes</label>
-                  <label class="toggle">
-                    <input type="checkbox" id="drop-dupes" autocomplete="off">
-                    <span class="toggle-slider"></span>
-                    <span class="toggle-label" id="drop-dupes-label">Off</span>
-                  </label>
-                </div>
-
-                <div class="setting-group">
-                  <label class="kawaii-label">Diff rectangle</label>
-                  <label class="toggle">
-                    <input type="checkbox" id="diff-rect" autocomplete="off">
-                    <span class="toggle-slider"></span>
-                    <span class="toggle-label" id="diff-rect-label">Off</span>
-                  </label>
-                </div>
-              </div>
-            </div>
-
-            <!-- Dither Mascot Pet Card -->
-            <div id="dither-pet-card" class="dither-pet-card">
-              <div class="dither-pet-bubble">
-                <span id="dither-pet-text">Loading my buddy...</span>
-              </div>
-              <div class="dither-pet-character" id="dither-pet-visual"></div>
-            </div>
-
-            <button id="convert-btn" class="btn-convert">
-              <span class="btn-icon" aria-hidden="true">✨</span>
-              <span>Convert to GIF</span>
-            </button>
-          </aside>
-        </div>
+              <button type="button" id="convert-btn" class="btn-convert" disabled>
+                <span class="btn-icon" aria-hidden="true">✨</span>
+                <span id="convert-btn-text">Add a video to convert</span>
+              </button>
+            </aside>
+          </div>
 
         <!-- Right Main: Results Feed -->
         <div class="workspace-results">
@@ -480,13 +488,94 @@
                   <path d="M59 23V19" stroke="#2f2d29" stroke-width="2" stroke-linecap="round" />
                 </svg>
               </div>
-              <p>Adjust settings and press "Convert to GIF" to compare renders!</p>
+              <p id="empty-state-text">Drop a video on the left, then press "Convert to GIF" to compare renders!</p>
             </div>
             <!-- Result cards will be prepended here -->
           </div>
         </div>
+        </div>
       </section>
     </main>
+
+    <!-- Global file drag-over indicator -->
+    <div id="global-drop-overlay" class="global-drop-overlay hidden" aria-hidden="true">
+      <div class="global-drop-card">
+        <span class="global-drop-icon">🎬</span>
+        <p class="global-drop-title">Drop video to add!</p>
+        <p class="global-drop-subtitle">Open in a new project tab or replace the active video</p>
+      </div>
+    </div>
+
+    <!-- Prompt when dropping a file while current project already has a video -->
+    <dialog id="drop-choice-dialog" class="cute-dialog" closedby="any" aria-labelledby="drop-choice-title">
+      <div class="cute-dialog-content cute-dialog-compact">
+        <button type="button" class="cute-dialog-close" id="drop-choice-close" aria-label="Close dialog">✕</button>
+        <h2 id="drop-choice-title" class="cute-dialog-title">✿ Add Video ✿</h2>
+        <div class="cute-dialog-body">
+          <p id="drop-choice-message" class="drop-choice-message"></p>
+          <p class="drop-choice-subtext">Opening a new project keeps your current video, renders, trim, and palette untouched.</p>
+          <form method="dialog" class="drop-choice-actions">
+            <button type="submit" value="new-tab" class="btn-choice btn-choice-primary" autofocus>
+              <span class="btn-choice-title">＋ Create New Project</span>
+              <span class="btn-choice-desc">Open in a separate tab</span>
+            </button>
+            <button type="submit" value="replace" class="btn-choice btn-choice-secondary" id="drop-choice-replace-btn">
+              <span class="btn-choice-title">↻ Replace Current Video</span>
+              <span class="btn-choice-desc" id="drop-choice-replace-hint">Swap video in this tab (keeps settings)</span>
+            </button>
+            <button type="submit" value="cancel" class="btn-choice-cancel">Cancel</button>
+          </form>
+        </div>
+      </div>
+    </dialog>
+
+    <!-- Palette Editor Popup Dialog -->
+    <dialog id="palette-dialog" class="cute-dialog" closedby="any" aria-labelledby="palette-dialog-title">
+      <div class="cute-dialog-content palette-dialog-content">
+        <button type="button" class="cute-dialog-close" id="palette-dialog-close" aria-label="Close palette editor" command="close" commandfor="palette-dialog">✕</button>
+        <h2 id="palette-dialog-title" class="cute-dialog-title">✿ Palette Editor ✿</h2>
+        <div class="cute-dialog-body palette-dialog-body">
+          <div class="palette-dialog-toolbar">
+            <button type="button" id="generate-palette-btn" class="btn-secondary-cute" disabled>
+              Load &amp; Edit Colors
+            </button>
+            <button type="button" id="copy-palette-from-btn" class="btn-mini-pill" aria-expanded="false" aria-controls="copy-palette-panel">
+              ⇄ Copy palette…
+            </button>
+            <button type="button" id="reset-palette-btn" class="btn-mini-pill btn-mini-pill-muted hidden" title="Clear custom palette and use auto-generated colors">
+              Reset auto
+            </button>
+          </div>
+
+          <div id="copy-palette-panel" class="copy-palette-panel hidden"></div>
+          <p id="palette-status-badge" class="palette-status-badge hidden"></p>
+
+          <div id="palette-grid-container" class="palette-grid-container hidden">
+            <div id="palette-grid" class="palette-grid"></div>
+            <p class="palette-hint-text">Click any color to edit; changes apply to next renders</p>
+          </div>
+          <p id="palette-empty-hint" class="palette-empty-hint">
+            Extract colors from the current video or copy a palette from another project tab.
+          </p>
+
+          <!-- Floating Color Picker Panel inside Palette Dialog -->
+          <div id="palette-floating-picker" class="palette-floating-picker hidden">
+            <div class="picker-header">
+              <span class="picker-title">✿ Pick Color ✿</span>
+              <button type="button" id="picker-close-btn" class="btn-change-small">✕</button>
+            </div>
+            <canvas id="picker-sv-canvas" width="200" height="200"></canvas>
+            <input type="range" id="picker-hue-slider" min="0" max="360" value="0" class="slider slider-pink" style="height: 12px; margin-top: 4px;">
+            <div class="picker-footer">
+              <div id="picker-preview" class="picker-preview"></div>
+              <input type="text" id="picker-hex-input" class="select picker-hex-input" maxlength="7">
+              <button type="button" id="picker-apply-btn" class="btn-secondary-cute picker-apply-btn">Apply</button>
+            </div>
+          </div>
+          <canvas id="palette-canvas" style="display:none"></canvas>
+        </div>
+      </div>
+    </dialog>
 
     <footer class="app-footer">
       <button type="button" class="footer-link" id="footer-about">About</button>
@@ -639,17 +728,17 @@
           </li>
           <li><strong>Denoise:</strong>
             <ul>
-              <li>Soft temporal/spatial cleanup before colors are quantized. Helps camera footage and compressed video; pixel art usually does not need it. Uses a mild FFmpeg default (no extra sliders).</li>
+              <li>Temporal/spatial smoothing (<code>hqdn3d</code>) before palette quantization. Great for noisy camera footage, but on clean UI, games, or pixel art it blurs sharp edges into gradients and can <em>increase</em> dithered GIF size.</li>
             </ul>
           </li>
           <li><strong>Drop dupes:</strong>
             <ul>
-              <li>Removes near-identical frames and keeps the pause as a longer GIF delay. Best for screen recordings and clips with still moments.</li>
+              <li>Removes identical/near-identical frames (<code>mpdecimate</code>) and stretches the preceding frame's delay for pauses in the middle. Note: FFmpeg's GIF encoder already compresses static pixels via transparency diffing, so savings are modest unless clips have long freezes, and trailing freezes at the very end of a clip may be shortened.</li>
             </ul>
           </li>
           <li><strong>Diff rectangle:</strong>
             <ul>
-              <li>Encodes only the bounding box that changed between frames. Strong on UI/sprites with a static background; weak on noisy full-frame motion.</li>
+              <li>Restricts dithering updates in <code>paletteuse</code> to the changed bounding box (<code>diff_mode=rectangle</code>). FFmpeg's GIF encoder already crops and diffs unchanged pixels by default; this option mainly helps prevent error-diffusion shimmer on noisy static backgrounds, and can slightly increase size on clean clips.</li>
             </ul>
           </li>
         </ul>

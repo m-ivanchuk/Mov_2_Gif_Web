@@ -3,39 +3,57 @@
  */
 
 // --- State ---
+const DEFAULT_SETTINGS = {
+  fps: 12,
+  scale: 100,
+  colors: 64,
+  transparency: false,
+  dither: 'floyd_steinberg',
+  playback: 'loop',
+  denoise: false,
+  dropDupes: false,
+  diffRect: false
+};
+
 const state = {
   ffmpeg: null,
   ffmpegLoaded: false,
-  file: null,
-  filename: null,
-  sizeBytes: 0,
-  durationSeconds: 0,
-  width: 0,
-  height: 0,
-  customPaletteEdited: false,
-  customPaletteColors: [],
-  crop: { left: 0, right: 0, top: 0, bottom: 0 }
+  projects: [],
+  activeProjectId: null,
+  ffmpegQueue: Promise.resolve(),
+  ffmpegBusy: false,
+  activeProgressHandler: null
 };
 
 let activeSwatchIndex = null;
+let pendingFileInputMode = 'empty-or-new';
+let pendingDropFiles = [];
 
 // --- DOM Elements ---
 const wasmLoadingBanner = document.getElementById('wasm-loading-banner');
 const appContent = document.getElementById('app-content');
-const uploadSection = document.getElementById('upload-section');
 const workspaceSection = document.getElementById('workspace-section');
+const workspacePanel = document.getElementById('workspace-panel');
+const projectTablist = document.getElementById('project-tablist');
+const addProjectBtn = document.getElementById('add-project-btn');
+const projectTabsBar = document.querySelector('.project-tabs-bar');
 const dropZone = document.getElementById('drop-zone');
+const browseBtn = document.getElementById('browse-btn');
 const fileInput = document.getElementById('file-input');
 
 // Workspace UI
+const projectMediaStage = document.getElementById('project-media-stage');
+const projectFileBar = document.getElementById('project-file-bar');
 const fileNameEl = document.getElementById('file-name');
 const fileSizeEl = document.getElementById('file-size');
 const fileDurationEl = document.getElementById('file-duration');
 const fileDimsEl = document.getElementById('file-dimensions');
-const closeSessionBtn = document.getElementById('close-session-btn');
+const replaceVideoBtn = document.getElementById('replace-video-btn');
+const trimCropBox = document.getElementById('trim-crop-box');
 
 // Settings UI
 const convertBtn = document.getElementById('convert-btn');
+const convertBtnText = document.getElementById('convert-btn-text');
 const fpsSlider = document.getElementById('fps');
 const fpsValue = document.getElementById('fps-value');
 const colorsSlider = document.getElementById('colors');
@@ -75,6 +93,27 @@ const dropDupesToggle = document.getElementById('drop-dupes');
 const dropDupesLabel = document.getElementById('drop-dupes-label');
 const diffRectToggle = document.getElementById('diff-rect');
 const diffRectLabel = document.getElementById('diff-rect-label');
+const ditherInput = document.getElementById('dither');
+const playbackInput = document.getElementById('playback');
+
+// Cross-Tab Copy & Dialogs
+const openPaletteBtn = document.getElementById('open-palette-btn');
+const paletteBtnDot = document.getElementById('palette-btn-dot');
+const paletteDialog = document.getElementById('palette-dialog');
+const paletteDialogClose = document.getElementById('palette-dialog-close');
+const copySettingsFromBtn = document.getElementById('copy-settings-from-btn');
+const copySettingsPopover = document.getElementById('copy-settings-popover');
+const copyPaletteFromBtn = document.getElementById('copy-palette-from-btn');
+const copyPalettePanel = document.getElementById('copy-palette-panel');
+const resetPaletteBtn = document.getElementById('reset-palette-btn');
+const paletteStatusBadge = document.getElementById('palette-status-badge');
+const paletteEmptyHint = document.getElementById('palette-empty-hint');
+const globalDropOverlay = document.getElementById('global-drop-overlay');
+const dropChoiceDialog = document.getElementById('drop-choice-dialog');
+const dropChoiceClose = document.getElementById('drop-choice-close');
+const dropChoiceMessage = document.getElementById('drop-choice-message');
+const dropChoiceReplaceBtn = document.getElementById('drop-choice-replace-btn');
+const dropChoiceReplaceHint = document.getElementById('drop-choice-replace-hint');
 
 // Palette Editor UI
 const generatePaletteBtn = document.getElementById('generate-palette-btn');
@@ -94,7 +133,142 @@ const pickerCloseBtn = document.getElementById('picker-close-btn');
 // Results UI
 const resultsFeed = document.getElementById('results-feed');
 const emptyState = document.getElementById('empty-state');
+const emptyStateText = document.getElementById('empty-state-text');
 const cardTemplate = document.getElementById('result-card-template');
+
+// --- Project Helpers ---
+function createEmptyPalette() {
+  return {
+    edited: false,
+    hasExtracted: false,
+    width: 0,
+    height: 0,
+    colors: [],
+    dataUrl: null,
+    sourceLabel: null
+  };
+}
+
+function clonePalette(pal, overrides = {}) {
+  return {
+    edited: !!pal.edited,
+    hasExtracted: !!pal.hasExtracted,
+    width: pal.width || 0,
+    height: pal.height || 0,
+    colors: (pal.colors || []).map(c => ({ ...c })),
+    dataUrl: pal.dataUrl || null,
+    sourceLabel: pal.sourceLabel || null,
+    ...overrides
+  };
+}
+
+function createProject(initialSettings = null) {
+  const id = 'proj_' + Math.random().toString(36).slice(2, 8) + Date.now().toString(36);
+  return {
+    id,
+    name: 'New Project',
+    customName: false,
+    file: null,
+    filename: null,
+    sizeBytes: 0,
+    durationSeconds: 0,
+    width: 0,
+    height: 0,
+    crop: { left: 0, right: 0, top: 0, bottom: 0 },
+    trim: { cutStart: 0, cutEnd: 0 },
+    settings: { ...DEFAULT_SETTINGS, ...(initialSettings || {}) },
+    palette: createEmptyPalette(),
+    cards: [],
+    pendingJobs: 0
+  };
+}
+
+function getActiveProject() {
+  return state.projects.find(p => p.id === state.activeProjectId) || null;
+}
+
+function getProjectById(id) {
+  return state.projects.find(p => p.id === id) || null;
+}
+
+function readControlsSettings() {
+  return {
+    fps: parseInt(fpsSlider.value, 10) || 12,
+    scale: parseInt(scaleSlider.value, 10) || 100,
+    colors: parseInt(colorsSlider.value, 10) || 64,
+    transparency: !!(transparencyToggle && transparencyToggle.checked),
+    dither: ditherInput ? ditherInput.value : 'floyd_steinberg',
+    playback: playbackInput ? playbackInput.value : 'loop',
+    denoise: !!(denoiseToggle && denoiseToggle.checked),
+    dropDupes: !!(dropDupesToggle && dropDupesToggle.checked),
+    diffRect: !!(diffRectToggle && diffRectToggle.checked)
+  };
+}
+
+function saveActiveProjectControls() {
+  const project = getActiveProject();
+  if (!project) return;
+  project.settings = readControlsSettings();
+  project.trim = {
+    cutStart: parseInt(trimStartSlider?.value, 10) || 0,
+    cutEnd: parseInt(trimEndSlider?.value, 10) || 0
+  };
+}
+
+function applySettingsToControls(settings) {
+  const s = { ...DEFAULT_SETTINGS, ...(settings || {}) };
+  fpsSlider.value = s.fps;
+  fpsValue.textContent = String(s.fps);
+  updateSliderFill(fpsSlider);
+
+  colorsSlider.value = s.colors;
+  colorsValue.textContent = String(s.colors);
+  updateSliderFill(colorsSlider);
+
+  scaleSlider.value = s.scale;
+  scaleValue.textContent = `${s.scale}%`;
+  updateSliderFill(scaleSlider);
+
+  if (transparencyToggle) {
+    transparencyToggle.checked = !!s.transparency;
+    transparencyToggle.dispatchEvent(new Event('change'));
+  }
+  if (denoiseToggle) {
+    denoiseToggle.checked = !!s.denoise;
+    denoiseToggle.dispatchEvent(new Event('change'));
+  }
+  if (dropDupesToggle) {
+    dropDupesToggle.checked = !!s.dropDupes;
+    dropDupesToggle.dispatchEvent(new Event('change'));
+  }
+  if (diffRectToggle) {
+    diffRectToggle.checked = !!s.diffRect;
+    diffRectToggle.dispatchEvent(new Event('change'));
+  }
+  if (ditherInput) {
+    ditherInput.value = s.dither;
+    ditherInput.dispatchEvent(new Event('change'));
+  }
+  if (playbackInput) {
+    playbackInput.value = s.playback;
+  }
+
+  updateScaleHint();
+  updateTrimControls();
+}
+
+function runInFFmpegQueue(taskFn) {
+  const run = state.ffmpegQueue.then(async () => {
+    state.ffmpegBusy = true;
+    try {
+      return await taskFn();
+    } finally {
+      state.ffmpegBusy = false;
+    }
+  });
+  state.ffmpegQueue = run.catch(() => {});
+  return run;
+}
 
 // --- Format Helpers ---
 function formatBytes(bytes, decimals = 1) {
@@ -123,6 +297,8 @@ function formatTimePrecise(seconds) {
 
 // --- Initialize FFmpeg.wasm ---
 async function initFFmpeg() {
+  initProjects();
+
   const isLighthouse = navigator.webdriver || 
                        navigator.userAgent.includes("HeadlessChrome") || 
                        navigator.userAgent.includes("moto g power") ||
@@ -147,6 +323,12 @@ async function initFFmpeg() {
       console.log('FFmpeg:', message);
     });
 
+    state.ffmpeg.on('progress', ({ progress }) => {
+      if (state.activeProgressHandler) {
+        state.activeProgressHandler(progress);
+      }
+    });
+
     const baseURL = 'ffmpeg';
     
     // Asynchronously fetch Core Wasm builds via local proxy Blobs to satisfy browser security
@@ -161,6 +343,7 @@ async function initFFmpeg() {
     // Transition views
     wasmLoadingBanner.classList.add('hidden');
     appContent.classList.remove('hidden');
+    updateActionButtonsState();
   } catch (err) {
     console.error('Failed to load FFmpeg.wasm:', err);
     alert('Oops! Failed to load WebAssembly Converter:\n' + err.message + '\n\nMake sure your browser supports SharedArrayBuffer and coi-serviceworker script was loaded correctly.');
@@ -174,21 +357,32 @@ fpsSlider.addEventListener('input', (e) => {
   fpsValue.textContent = e.target.value;
   updateSliderFill(e.target);
   updateTrimControls();
+  saveActiveProjectControls();
 });
 
 colorsSlider.addEventListener('input', (e) => {
   colorsValue.textContent = e.target.value;
   updateSliderFill(e.target);
+  saveActiveProjectControls();
 });
 
 scaleSlider.addEventListener('input', (e) => {
   scaleValue.textContent = e.target.value + '%';
   updateSliderFill(e.target);
   updateScaleHint();
+  saveActiveProjectControls();
 });
 
+if (ditherInput) {
+  ditherInput.addEventListener('change', saveActiveProjectControls);
+}
+if (playbackInput) {
+  playbackInput.addEventListener('change', saveActiveProjectControls);
+}
+
 function updateScaleHint() {
-  if (state.width && state.height) {
+  const project = getActiveProject();
+  if (project && project.width && project.height) {
     const out = getOutputDimensions();
     const crop = getCropState();
     if (crop.active) {
@@ -196,6 +390,8 @@ function updateScaleHint() {
     } else {
       scaleHint.textContent = `Output size: ${out.width}x${out.height} px`;
     }
+  } else {
+    scaleHint.textContent = 'Output size: —';
   }
 }
 
@@ -205,9 +401,10 @@ function evenSize(n) {
 }
 
 function getCropState() {
-  const srcW = state.width || 0;
-  const srcH = state.height || 0;
-  const crop = state.crop || { left: 0, right: 0, top: 0, bottom: 0 };
+  const project = getActiveProject();
+  const srcW = project?.width || 0;
+  const srcH = project?.height || 0;
+  const crop = project?.crop || { left: 0, right: 0, top: 0, bottom: 0 };
   const minKeep = 2;
   let left = Math.max(0, Math.round(Number(crop.left) || 0));
   let right = Math.max(0, Math.round(Number(crop.right) || 0));
@@ -247,9 +444,10 @@ function getCropState() {
 }
 
 function getOutputDimensions() {
+  const project = getActiveProject();
   const crop = getCropState();
-  const srcW = crop.w || state.width || 0;
-  const srcH = crop.h || state.height || 0;
+  const srcW = crop.w || project?.width || 0;
+  const srcH = crop.h || project?.height || 0;
   const scale = parseInt(scaleSlider.value, 10) / 100;
   return {
     width: Math.max(2, Math.round(srcW * scale)),
@@ -257,16 +455,15 @@ function getOutputDimensions() {
   };
 }
 
-function buildGifFilterGraph(fps, width, height, playback) {
-  const crop = getCropState();
+function composeGifFilterGraph({ fps, width, height, playback, crop, denoise, dropDupes }) {
   const pre = [];
-  if (crop.active) pre.push(`crop=${crop.w}:${crop.h}:${crop.x}:${crop.y}`);
+  if (crop && crop.active) pre.push(`crop=${crop.w}:${crop.h}:${crop.x}:${crop.y}`);
   // Mild hqdn3d defaults: enough to flatten codec noise, not a separate strength slider.
-  if (denoiseToggle && denoiseToggle.checked) pre.push('hqdn3d=4:3:6:4');
+  if (denoise) pre.push('hqdn3d=4:3:6:4');
   const preF = pre.join(',');
 
   const post = [`fps=${fps}`, `scale=${width}:${height}:flags=lanczos`];
-  if (dropDupesToggle && dropDupesToggle.checked) {
+  if (dropDupes) {
     post.push('mpdecimate', 'setpts=PTS-STARTPTS');
   }
   const tail = post.join(',');
@@ -278,6 +475,18 @@ function buildGifFilterGraph(fps, width, height, playback) {
   return preF ? `${preF},${tail}` : tail;
 }
 
+function buildGifFilterGraph(fps, width, height, playback) {
+  return composeGifFilterGraph({
+    fps,
+    width,
+    height,
+    playback,
+    crop: getCropState(),
+    denoise: !!(denoiseToggle && denoiseToggle.checked),
+    dropDupes: !!(dropDupesToggle && dropDupesToggle.checked)
+  });
+}
+
 // --- Trim (dual-handle keep-range at current output FPS) ---
 let trimPreviewUrl = null;
 let trimPreviewGeneration = 0;
@@ -285,8 +494,10 @@ let trimScrubbing = false;
 let activeTrimHandle = null;
 
 function getTrimState() {
+  const project = getActiveProject();
+  const durationSeconds = project?.durationSeconds || 0;
   const fps = parseInt(fpsSlider.value, 10) || 12;
-  const totalFrames = Math.max(1, Math.round((state.durationSeconds || 0) * fps));
+  const totalFrames = Math.max(1, Math.round(durationSeconds * fps));
   let cutStart = parseInt(trimStartSlider.value, 10) || 0;
   let cutEnd = parseInt(trimEndSlider.value, 10) || 0;
   const maxCut = Math.max(0, totalFrames - 1);
@@ -319,8 +530,7 @@ function getTrimState() {
   };
 }
 
-function getTrimInputArgs() {
-  const trim = getTrimState();
+function getTrimInputArgs(trim = getTrimState()) {
   if (!trim.active) return [];
   const args = [];
   if (trim.startTime > 0.0005) {
@@ -374,8 +584,9 @@ function updateTrimRangeUI() {
 
 function updateTrimFrameLabel(handle) {
   if (!trimFrameLabel) return;
+  const project = getActiveProject();
   const trim = getTrimState();
-  if (!state.durationSeconds) {
+  if (!project?.durationSeconds) {
     trimFrameLabel.textContent = 'Move a handle to scrub the keep range';
     return;
   }
@@ -394,7 +605,8 @@ function updateTrimFrameLabel(handle) {
 }
 
 function updateTrimPlayhead(timeSeconds) {
-  if (!trimPlayhead || !state.durationSeconds) return;
+  const project = getActiveProject();
+  if (!trimPlayhead || !project?.durationSeconds) return;
   const trim = getTrimState();
   const pct = frameToAxisPercent((timeSeconds || 0) * trim.fps, trim.totalFrames);
   trimPlayhead.style.left = `${Math.max(0, Math.min(100, pct))}%`;
@@ -420,8 +632,10 @@ function seekTrimPreview(handle) {
 function updateTrimControls(changed) {
   if (!trimStartSlider || !trimEndSlider) return;
 
+  const project = getActiveProject();
+  const durationSeconds = project?.durationSeconds || 0;
   const fps = parseInt(fpsSlider.value, 10) || 12;
-  const totalFrames = Math.max(1, Math.round((state.durationSeconds || 0) * fps));
+  const totalFrames = Math.max(1, Math.round(durationSeconds * fps));
   const maxCut = Math.max(0, totalFrames - 1);
 
   let cutStart = parseInt(trimStartSlider.value, 10) || 0;
@@ -442,18 +656,21 @@ function updateTrimControls(changed) {
   trimEndSlider.max = maxCut;
   trimStartSlider.value = cutStart;
   trimEndSlider.value = cutEnd;
+  if (project) {
+    project.trim = { cutStart, cutEnd };
+  }
 
   const trim = getTrimState();
   if (trimStartValue) trimStartValue.textContent = formatTimePrecise(trim.startTime);
   if (trimEndValue) trimEndValue.textContent = formatTimePrecise(trim.endTime);
   if (trimTimelineStart) trimTimelineStart.textContent = '0:00.0';
-  if (trimTimelineEnd) trimTimelineEnd.textContent = formatTimePrecise(state.durationSeconds || 0);
+  if (trimTimelineEnd) trimTimelineEnd.textContent = formatTimePrecise(durationSeconds);
 
   if (trimKeptBadge) {
     trimKeptBadge.textContent = trim.active ? `${trim.kept} f` : 'All';
   }
   if (trimHint) {
-    if (!state.durationSeconds) {
+    if (!durationSeconds) {
       trimHint.textContent = 'Keeping all frames';
     } else if (!trim.active) {
       trimHint.textContent = `Keeping all ${trim.totalFrames} frames at ${trim.fps} FPS`;
@@ -730,18 +947,20 @@ if (trimPreviewPlay) {
 let cropDrag = null;
 
 function layoutMediaStage() {
-  if (!mediaCanvas || !state.width || !state.height) return;
-  const gutterX = 44;
-  const maxW = Math.max(80, ((trimPreviewWrap && trimPreviewWrap.clientWidth) ? trimPreviewWrap.clientWidth : 280) - gutterX);
-  const maxH = 200;
-  const fit = Math.min(maxW / state.width, maxH / state.height);
-  mediaCanvas.style.width = `${Math.max(1, Math.round(state.width * fit))}px`;
-  mediaCanvas.style.height = `${Math.max(1, Math.round(state.height * fit))}px`;
+  const project = getActiveProject();
+  if (!mediaCanvas || !project?.width || !project?.height) return;
+  const gutterX = 48;
+  const maxW = Math.max(80, ((trimPreviewWrap && trimPreviewWrap.clientWidth) ? trimPreviewWrap.clientWidth : 640) - gutterX);
+  const maxH = window.innerWidth <= 740 ? 240 : 340;
+  const fit = Math.min(maxW / project.width, maxH / project.height);
+  mediaCanvas.style.width = `${Math.max(1, Math.round(project.width * fit))}px`;
+  mediaCanvas.style.height = `${Math.max(1, Math.round(project.height * fit))}px`;
   updateCropUI();
 }
 
 function updateCropUI() {
-  if (!cropRect || !state.width || !state.height) return;
+  const project = getActiveProject();
+  if (!cropRect || !project?.width || !project?.height) return;
   const crop = getCropState();
   const leftPct = (crop.left / crop.srcW) * 100;
   const topPct = (crop.top / crop.srcH) * 100;
@@ -779,13 +998,17 @@ function updateCropUI() {
 }
 
 function resetCrop() {
-  state.crop = { left: 0, right: 0, top: 0, bottom: 0 };
+  const project = getActiveProject();
+  if (project) {
+    project.crop = { left: 0, right: 0, top: 0, bottom: 0 };
+  }
   updateCropUI();
 }
 
 function applyCropInsets(next, edges) {
-  const srcW = state.width || 0;
-  const srcH = state.height || 0;
+  const project = getActiveProject();
+  const srcW = project?.width || 0;
+  const srcH = project?.height || 0;
   const minKeep = 2;
   const edgeList = edges || '';
   let left = Math.max(0, Math.round(next.left));
@@ -814,16 +1037,19 @@ function applyCropInsets(next, edges) {
     }
   }
 
-  state.crop = { left, right, top, bottom };
+  if (project) {
+    project.crop = { left, right, top, bottom };
+  }
   updateCropUI();
 }
 
 function startCropDrag(edge, clientX, clientY, pointerId, target) {
+  const project = getActiveProject();
   cropDrag = {
     edge,
     startX: clientX,
     startY: clientY,
-    origin: { ...state.crop }
+    origin: { ...(project?.crop || { left: 0, right: 0, top: 0, bottom: 0 }) }
   };
   if (target && pointerId != null && target.setPointerCapture) {
     try { target.setPointerCapture(pointerId); } catch (e) {}
@@ -834,11 +1060,12 @@ function startCropDrag(edge, clientX, clientY, pointerId, target) {
 }
 
 function moveCropDrag(clientX, clientY) {
-  if (!cropDrag || !mediaCanvas || !state.width || !state.height) return;
+  const project = getActiveProject();
+  if (!cropDrag || !mediaCanvas || !project?.width || !project?.height) return;
   const rect = mediaCanvas.getBoundingClientRect();
   if (rect.width <= 0 || rect.height <= 0) return;
-  const dx = ((clientX - cropDrag.startX) / rect.width) * state.width;
-  const dy = ((clientY - cropDrag.startY) / rect.height) * state.height;
+  const dx = ((clientX - cropDrag.startX) / rect.width) * project.width;
+  const dy = ((clientY - cropDrag.startY) / rect.height) * project.height;
   const next = { ...cropDrag.origin };
   const edge = cropDrag.edge;
 
@@ -964,7 +1191,8 @@ if (cropResetBtn) {
 }
 
 window.addEventListener('resize', () => {
-  if (state.file) layoutMediaStage();
+  const project = getActiveProject();
+  if (project?.file) layoutMediaStage();
 });
 
 function bindOnOffToggle(toggle, label) {
@@ -972,7 +1200,10 @@ function bindOnOffToggle(toggle, label) {
   const sync = () => {
     label.textContent = toggle.checked ? 'On' : 'Off';
   };
-  toggle.addEventListener('change', sync);
+  toggle.addEventListener('change', () => {
+    sync();
+    saveActiveProjectControls();
+  });
   toggle.addEventListener('input', sync);
   sync();
   return sync;
@@ -1204,10 +1435,12 @@ if (pickerCloseBtn) {
 
 if (pickerApplyBtn) {
   pickerApplyBtn.addEventListener('click', () => {
-    if (activeSwatchIndex === null) return;
+    const project = getActiveProject();
+    if (!project || activeSwatchIndex === null) return;
     const { r, g, b, hex } = updatePickerColor();
 
-    const color = state.customPaletteColors[activeSwatchIndex];
+    const color = project.palette.colors[activeSwatchIndex];
+    if (!color) return;
     color.hex = hex;
     color.r = r;
     color.g = g;
@@ -1230,46 +1463,81 @@ if (pickerApplyBtn) {
       swatches[activeSwatchIndex].title = `Color ${activeSwatchIndex + 1}: ${hex}`;
     }
 
-    state.customPaletteEdited = true;
+    project.palette.edited = true;
+    project.palette.hasExtracted = true;
+    project.palette.sourceLabel = 'Custom palette edited';
+    project.palette.dataUrl = paletteCanvas.toDataURL('image/png');
+    updatePaletteMetaUI(project.palette);
     if (pickerPanel) pickerPanel.classList.add('hidden');
   });
 }
 
-function loadPaletteFromImage(img, markAsEdited = false) {
-  paletteCanvas.width = img.width;
-  paletteCanvas.height = img.height;
-  const ctx = paletteCanvas.getContext('2d');
-  ctx.drawImage(img, 0, 0);
+function updatePaletteMetaUI(palette) {
+  const hasColors = !!(palette && palette.colors && palette.colors.length > 0);
+  if (resetPaletteBtn) {
+    resetPaletteBtn.classList.toggle('hidden', !hasColors);
+  }
+  if (paletteEmptyHint) {
+    paletteEmptyHint.classList.toggle('hidden', hasColors);
+  }
+  if (paletteBtnDot) {
+    paletteBtnDot.classList.toggle('hidden', !(palette && palette.edited));
+  }
+  if (paletteStatusBadge) {
+    if (palette && palette.edited) {
+      paletteStatusBadge.textContent = palette.sourceLabel || 'Custom palette active for renders';
+      paletteStatusBadge.classList.remove('hidden');
+    } else if (hasColors) {
+      paletteStatusBadge.textContent = 'Extracted preview (auto-quantized on render unless edited)';
+      paletteStatusBadge.classList.remove('hidden');
+    } else {
+      paletteStatusBadge.textContent = '';
+      paletteStatusBadge.classList.add('hidden');
+    }
+  }
+}
 
-  const imgData = ctx.getImageData(0, 0, img.width, img.height);
-  const data = imgData.data;
+function applyPaletteToUI(palette) {
+  if (pickerPanel) pickerPanel.classList.add('hidden');
+  activeSwatchIndex = null;
+  if (!paletteGrid || !paletteGridContainer || !paletteCanvas) return;
 
   paletteGrid.innerHTML = '';
-  state.customPaletteColors = [];
+  const colors = palette?.colors || [];
+  if (!colors.length || !palette.width || !palette.height) {
+    paletteGridContainer.classList.add('hidden');
+    updatePaletteMetaUI(palette);
+    return;
+  }
 
-  const numColors = img.width * img.height;
-  for (let i = 0; i < numColors; i++) {
-    const r = data[i * 4];
-    const g = data[i * 4 + 1];
-    const b = data[i * 4 + 2];
-    const a = data[i * 4 + 3];
+  paletteCanvas.width = palette.width;
+  paletteCanvas.height = palette.height;
+  const ctx = paletteCanvas.getContext('2d');
+  const imgData = ctx.createImageData(palette.width, palette.height);
 
-    const hex = rgbToHex(r, g, b);
-    state.customPaletteColors.push({ r, g, b, a, hex, index: i });
+  colors.forEach((c, i) => {
+    const off = i * 4;
+    imgData.data[off] = c.r;
+    imgData.data[off + 1] = c.g;
+    imgData.data[off + 2] = c.b;
+    imgData.data[off + 3] = c.a;
 
-    const swatch = document.createElement('div');
+    const swatch = document.createElement('button');
+    swatch.type = 'button';
     swatch.className = 'palette-swatch';
-    swatch.style.backgroundColor = hex;
-    swatch.title = `Color ${i + 1}: ${hex}`;
-    
-    if (a === 0) {
+    swatch.style.backgroundColor = c.hex;
+    swatch.title = `Color ${i + 1}: ${c.hex}`;
+    swatch.setAttribute('aria-label', swatch.title);
+
+    if (c.a === 0) {
       swatch.style.background = 'repeating-linear-gradient(45deg, #ccc, #ccc 2px, #fff 2px, #fff 4px)';
       swatch.title = `Color ${i + 1}: Transparent`;
+      swatch.setAttribute('aria-label', swatch.title);
     }
 
     swatch.addEventListener('click', () => {
       activeSwatchIndex = i;
-      const startHex = a === 0 ? '#ffffff' : hex;
+      const startHex = c.a === 0 ? '#ffffff' : c.hex;
       const rgb = hexToRgb(startHex);
       if (rgb) {
         const hsv = rgbToHsv(rgb.r, rgb.g, rgb.b);
@@ -1284,181 +1552,975 @@ function loadPaletteFromImage(img, markAsEdited = false) {
     });
 
     paletteGrid.appendChild(swatch);
+  });
+
+  ctx.putImageData(imgData, 0, 0);
+  paletteGridContainer.classList.remove('hidden');
+  updatePaletteMetaUI(palette);
+}
+
+function loadPaletteFromImage(img, markAsEdited = false, targetProject = getActiveProject(), sourceLabel = null) {
+  if (!targetProject) return;
+  const tempCanvas = document.createElement('canvas');
+  tempCanvas.width = img.width;
+  tempCanvas.height = img.height;
+  const ctx = tempCanvas.getContext('2d');
+  ctx.drawImage(img, 0, 0);
+
+  const imgData = ctx.getImageData(0, 0, img.width, img.height);
+  const data = imgData.data;
+  const colors = [];
+
+  const numColors = img.width * img.height;
+  for (let i = 0; i < numColors; i++) {
+    const r = data[i * 4];
+    const g = data[i * 4 + 1];
+    const b = data[i * 4 + 2];
+    const a = data[i * 4 + 3];
+    colors.push({ r, g, b, a, hex: rgbToHex(r, g, b), index: i });
   }
 
-  paletteGridContainer.classList.remove('hidden');
-  state.customPaletteEdited = markAsEdited;
+  targetProject.palette = {
+    edited: markAsEdited,
+    hasExtracted: true,
+    width: img.width,
+    height: img.height,
+    colors,
+    dataUrl: tempCanvas.toDataURL('image/png'),
+    sourceLabel: sourceLabel || (markAsEdited ? 'Custom palette active' : null)
+  };
+
+  if (targetProject.id === state.activeProjectId) {
+    applyPaletteToUI(targetProject.palette);
+  }
+}
+
+if (resetPaletteBtn) {
+  resetPaletteBtn.addEventListener('click', () => {
+    const project = getActiveProject();
+    if (!project) return;
+    project.palette = createEmptyPalette();
+    applyPaletteToUI(project.palette);
+  });
 }
 
 // Generate & Load Colors (Pure Client-Side via Wasm FFmpeg)
 if (generatePaletteBtn) {
   generatePaletteBtn.addEventListener('click', async () => {
-    if (!state.ffmpegLoaded || !state.file) {
-      alert('Please upload a video first!');
-      return;
-    }
+    const project = getActiveProject();
+    if (!state.ffmpegLoaded || !project || !project.file) return;
 
     generatePaletteBtn.disabled = true;
     const originalText = generatePaletteBtn.textContent;
-    generatePaletteBtn.textContent = 'Generating...';
+    generatePaletteBtn.textContent = state.ffmpegBusy ? 'Queued...' : 'Generating...';
 
-    const tempInputName = 'temp_input_palette.' + state.filename.split('.').pop();
-    const paletteName = 'temp_palette.png';
+    const settingsSnap = readControlsSettings();
+    const trimSnap = getTrimState();
+    const cropSnap = getCropState();
+    const dimsSnap = getOutputDimensions();
+    const ext = project.filename.split('.').pop();
+    const tempInputName = `temp_input_palette_${Date.now()}.${ext}`;
+    const paletteName = `temp_palette_${Date.now()}.png`;
 
     try {
-      const { width, height } = getOutputDimensions();
-      const fps = parseInt(fpsSlider.value, 10);
-      const colors = parseInt(colorsSlider.value, 10);
-      const trans = transparencyToggle.checked ? 'yes' : 'no';
+      await runInFFmpegQueue(async () => {
+        if (project.id === state.activeProjectId) {
+          generatePaletteBtn.textContent = 'Generating...';
+        }
+        const { fetchFile } = FFmpegUtil;
+        await state.ffmpeg.writeFile(tempInputName, await fetchFile(project.file));
 
-      // 1. Write the input file to the WebAssembly Virtual Filesystem
-      const { fetchFile } = FFmpegUtil;
-      await state.ffmpeg.writeFile(tempInputName, await fetchFile(state.file));
+        const palettegenOpts = `max_colors=${settingsSnap.colors}` + (settingsSnap.transparency ? ':reserve_transparent=1' : '');
+        const filterSource = composeGifFilterGraph({
+          fps: settingsSnap.fps,
+          width: dimsSnap.width,
+          height: dimsSnap.height,
+          playback: 'loop',
+          crop: cropSnap,
+          denoise: settingsSnap.denoise,
+          dropDupes: settingsSnap.dropDupes
+        });
+        const vf = `${filterSource},palettegen=${palettegenOpts}`;
 
-      // 2. Prepare filters and execute palettegen
-      const palettegenOpts = `max_colors=${colors}` + (trans === 'yes' ? ':reserve_transparent=1' : '');
-      const vf = `${buildGifFilterGraph(fps, width, height, 'loop')},palettegen=${palettegenOpts}`;
+        await state.ffmpeg.exec([
+          ...getTrimInputArgs(trimSnap),
+          '-i', tempInputName,
+          '-vf', vf,
+          '-y', paletteName
+        ]);
 
-      await state.ffmpeg.exec([
-        ...getTrimInputArgs(),
-        '-i', tempInputName,
-        '-vf', vf,
-        '-y', paletteName
-      ]);
+        const paletteData = await state.ffmpeg.readFile(paletteName);
+        const paletteBlob = new Blob([paletteData.buffer], { type: 'image/png' });
+        const blobUrl = URL.createObjectURL(paletteBlob);
 
-      // 3. Read generated palette file from virtual FS
-      const paletteData = await state.ffmpeg.readFile(paletteName);
-      const paletteBlob = new Blob([paletteData.buffer], { type: 'image/png' });
+        await new Promise((resolve, reject) => {
+          const img = new Image();
+          img.onload = () => {
+            loadPaletteFromImage(img, false, project, null);
+            URL.revokeObjectURL(blobUrl);
+            resolve();
+          };
+          img.onerror = (err) => {
+            URL.revokeObjectURL(blobUrl);
+            reject(err);
+          };
+          img.src = blobUrl;
+        });
 
-      // Load blob into canvas
-      const img = new Image();
-      img.onload = function () {
-        loadPaletteFromImage(img, false);
-      };
-      img.src = URL.createObjectURL(paletteBlob);
-
+        try { await state.ffmpeg.deleteFile(tempInputName); } catch (e) {}
+        try { await state.ffmpeg.deleteFile(paletteName); } catch (e) {}
+      });
     } catch (err) {
       console.error('Failed client-side palettegen:', err);
       alert('Failed to extract colors: ' + err.message);
+      try { await state.ffmpeg.deleteFile(tempInputName); } catch (e) {}
+      try { await state.ffmpeg.deleteFile(paletteName); } catch (e) {}
     } finally {
-      // Clean up temp files
-      try {
-        await state.ffmpeg.deleteFile(tempInputName);
-      } catch (e) {}
-      try {
-        await state.ffmpeg.deleteFile(paletteName);
-      } catch (e) {}
-
-      generatePaletteBtn.disabled = false;
       generatePaletteBtn.textContent = originalText;
+      updateActionButtonsState();
     }
   });
 }
 
-// --- File Handling & Native Probing ---
-['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
-  dropZone.addEventListener(eventName, preventDefaults, false);
-});
+// --- Multi-Project Tabs & Workspace Hydration ---
+function initProjects() {
+  if (state.projects.length > 0) return;
+  const first = createProject();
+  state.projects.push(first);
+  state.activeProjectId = first.id;
+  renderProjectTabs();
+  renderActiveProjectWorkspace();
+}
 
+function updateActionButtonsState() {
+  const project = getActiveProject();
+  const hasFile = !!(project && project.file);
+  if (generatePaletteBtn) {
+    generatePaletteBtn.disabled = !(state.ffmpegLoaded && hasFile);
+  }
+  if (convertBtn) {
+    convertBtn.disabled = !(state.ffmpegLoaded && hasFile);
+  }
+  if (convertBtnText) {
+    if (!state.ffmpegLoaded) {
+      convertBtnText.textContent = 'Loading engine...';
+    } else if (!hasFile) {
+      convertBtnText.textContent = 'Add a video to convert';
+    } else {
+      convertBtnText.textContent = 'Convert to GIF';
+    }
+  }
+}
+
+function renderProjectTabs() {
+  if (!projectTablist) return;
+  projectTablist.innerHTML = '';
+
+  const singleEmpty = state.projects.length === 1 && !state.projects[0].file;
+
+  state.projects.forEach((project) => {
+    const isActive = project.id === state.activeProjectId;
+
+    const item = document.createElement('div');
+    item.className = 'project-tab-item' + (isActive ? ' is-active' : '');
+    item.setAttribute('role', 'presentation');
+    item.dataset.projectId = project.id;
+
+    const tabBtn = document.createElement('button');
+    tabBtn.type = 'button';
+    tabBtn.role = 'tab';
+    tabBtn.id = `tab-${project.id}`;
+    tabBtn.className = 'project-tab';
+    tabBtn.setAttribute('aria-selected', String(isActive));
+    tabBtn.tabIndex = isActive ? 0 : -1;
+
+    const status = document.createElement('span');
+    status.className = 'project-tab-status' + (project.pendingJobs > 0 ? ' is-busy' : '');
+    status.setAttribute('aria-hidden', 'true');
+    status.textContent = project.pendingJobs > 0 ? '◌' : (project.file ? '🎬' : '📄');
+
+    const label = document.createElement('span');
+    label.className = 'project-tab-label';
+    label.textContent = project.name;
+    label.title = `${project.name} (double-click to rename)`;
+
+    tabBtn.appendChild(status);
+    tabBtn.appendChild(label);
+
+    if (project.cards.length > 0) {
+      const count = document.createElement('span');
+      count.className = 'project-tab-count';
+      count.textContent = String(project.cards.length);
+      count.title = `${project.cards.length} render(s)`;
+      tabBtn.appendChild(count);
+    }
+
+    tabBtn.addEventListener('click', () => {
+      if (project.id !== state.activeProjectId) {
+        switchToProject(project.id);
+      }
+    });
+
+    tabBtn.addEventListener('dblclick', (e) => {
+      e.stopPropagation();
+      startTabRename(project, tabBtn, label);
+    });
+
+    const closeBtn = document.createElement('button');
+    closeBtn.type = 'button';
+    closeBtn.className = 'project-tab-close';
+    closeBtn.textContent = '✕';
+    closeBtn.setAttribute('aria-label', `Close project ${project.name}`);
+    closeBtn.title = singleEmpty ? 'Empty project' : `Close ${project.name}`;
+    closeBtn.disabled = singleEmpty;
+    closeBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      closeProject(project.id);
+    });
+
+    item.appendChild(tabBtn);
+    item.appendChild(closeBtn);
+    projectTablist.appendChild(item);
+  });
+
+  const activeTabEl = projectTablist.querySelector('[aria-selected="true"]');
+  if (activeTabEl) {
+    try {
+      activeTabEl.scrollIntoView({ block: 'nearest', inline: 'nearest', container: 'nearest' });
+    } catch (e) {
+      activeTabEl.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    }
+  }
+}
+
+function startTabRename(project, tabBtn, labelEl) {
+  if (tabBtn.querySelector('.project-tab-rename-input')) return;
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.className = 'project-tab-rename-input';
+  input.value = project.name;
+  input.maxLength = 48;
+  input.setAttribute('aria-label', 'Project name');
+
+  labelEl.replaceWith(input);
+  input.focus();
+  input.select();
+
+  let done = false;
+  const finish = (save) => {
+    if (done) return;
+    done = true;
+    if (save) {
+      const trimmed = input.value.trim();
+      if (trimmed) {
+        project.name = trimmed;
+        project.customName = true;
+      }
+    }
+    renderProjectTabs();
+  };
+
+  input.addEventListener('keydown', (e) => {
+    e.stopPropagation();
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      finish(true);
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      finish(false);
+    }
+  });
+  input.addEventListener('click', (e) => e.stopPropagation());
+  input.addEventListener('blur', () => finish(true));
+}
+
+if (projectTablist) {
+  projectTablist.addEventListener('keydown', (e) => {
+    const tabs = Array.from(projectTablist.querySelectorAll('[role="tab"]'));
+    if (!tabs.length) return;
+    const currentIndex = tabs.indexOf(document.activeElement);
+    if (currentIndex === -1) return;
+
+    let nextIndex = null;
+    if (e.key === 'ArrowRight') nextIndex = (currentIndex + 1) % tabs.length;
+    else if (e.key === 'ArrowLeft') nextIndex = (currentIndex - 1 + tabs.length) % tabs.length;
+    else if (e.key === 'Home') nextIndex = 0;
+    else if (e.key === 'End') nextIndex = tabs.length - 1;
+
+    if (nextIndex !== null) {
+      e.preventDefault();
+      const targetTab = tabs[nextIndex];
+      const item = targetTab.closest('.project-tab-item');
+      if (item?.dataset.projectId) {
+        switchToProject(item.dataset.projectId);
+        const updatedTab = document.getElementById(`tab-${item.dataset.projectId}`);
+        if (updatedTab) updatedTab.focus();
+      }
+    }
+  });
+}
+
+function renderActiveProjectWorkspace() {
+  const project = getActiveProject();
+  if (!project) return;
+
+  if (workspacePanel) {
+    workspacePanel.setAttribute('aria-labelledby', `tab-${project.id}`);
+    workspacePanel.classList.toggle('is-empty', !project.file);
+  }
+
+  // Restore trim values before applySettingsToControls (which calls updateTrimControls)
+  if (trimStartSlider) trimStartSlider.value = project.file ? (project.trim.cutStart || 0) : 0;
+  if (trimEndSlider) trimEndSlider.value = project.file ? (project.trim.cutEnd || 0) : 0;
+
+  applySettingsToControls(project.settings);
+
+  if (project.file) {
+    if (dropZone) dropZone.classList.add('hidden');
+    if (projectMediaStage) projectMediaStage.classList.remove('hidden');
+
+    fileNameEl.textContent = project.filename;
+    fileSizeEl.textContent = formatBytes(project.sizeBytes);
+    fileDurationEl.textContent = formatTime(project.durationSeconds);
+    fileDimsEl.textContent = `${project.width}x${project.height}`;
+
+    updateTrimControls();
+
+    requestAnimationFrame(() => {
+      layoutMediaStage();
+      updateCropUI();
+      tryAttachTrimPreview(project.file);
+    });
+    if (emptyStateText) {
+      emptyStateText.textContent = 'Adjust settings and press "Convert to GIF" to compare renders!';
+    }
+  } else {
+    if (dropZone) dropZone.classList.remove('hidden');
+    if (projectMediaStage) projectMediaStage.classList.add('hidden');
+
+    clearTrimPreview();
+    updateTrimControls();
+    if (emptyStateText) {
+      emptyStateText.textContent = 'Drop a video above, then press "Convert to GIF" to compare renders!';
+    }
+  }
+
+  applyPaletteToUI(project.palette);
+
+  // Swap visible result cards to only this project's cards
+  if (resultsFeed) {
+    Array.from(resultsFeed.querySelectorAll('.result-card')).forEach(card => card.remove());
+    project.cards.forEach(cardEl => resultsFeed.appendChild(cardEl));
+    sortResultsFeed();
+    checkEmptyState();
+  }
+
+  updateActionButtonsState();
+}
+
+function switchToProject(projectId) {
+  if (!getProjectById(projectId)) return;
+  saveActiveProjectControls();
+  state.activeProjectId = projectId;
+  renderProjectTabs();
+  renderActiveProjectWorkspace();
+}
+
+function addNewProjectTab(activate = true, inheritSettings = true) {
+  saveActiveProjectControls();
+  const current = getActiveProject();
+  const baseSettings = inheritSettings && current ? current.settings : DEFAULT_SETTINGS;
+  const proj = createProject(baseSettings);
+  state.projects.push(proj);
+  if (activate) {
+    state.activeProjectId = proj.id;
+  }
+  renderProjectTabs();
+  if (activate) {
+    renderActiveProjectWorkspace();
+  }
+  return proj;
+}
+
+function closeProject(projectId) {
+  const index = state.projects.findIndex(p => p.id === projectId);
+  if (index === -1) return;
+  const project = state.projects[index];
+
+  if (state.projects.length === 1) {
+    if (!project.file && project.cards.length === 0) return;
+    // Reset single remaining tab back to clean empty project
+    project.cards.forEach(cardEl => {
+      const link = cardEl.querySelector('.btn-download');
+      if (link?.href && link.href.startsWith('blob:')) URL.revokeObjectURL(link.href);
+    });
+    project.name = 'New Project';
+    project.customName = false;
+    project.file = null;
+    project.filename = null;
+    project.sizeBytes = 0;
+    project.durationSeconds = 0;
+    project.width = 0;
+    project.height = 0;
+    project.crop = { left: 0, right: 0, top: 0, bottom: 0 };
+    project.trim = { cutStart: 0, cutEnd: 0 };
+    project.palette = createEmptyPalette();
+    project.cards = [];
+    renderProjectTabs();
+    renderActiveProjectWorkspace();
+    return;
+  }
+
+  [...project.cards].forEach(cardEl => {
+    const delBtn = cardEl.querySelector('.btn-delete');
+    if (delBtn) delBtn.click();
+    const link = cardEl.querySelector('.btn-download');
+    if (link?.href && link.href.startsWith('blob:')) URL.revokeObjectURL(link.href);
+  });
+
+  state.projects.splice(index, 1);
+  if (state.activeProjectId === projectId) {
+    const nextProj = state.projects[Math.min(index, state.projects.length - 1)];
+    state.activeProjectId = nextProj.id;
+  }
+  renderProjectTabs();
+  renderActiveProjectWorkspace();
+}
+
+if (addProjectBtn) {
+  addProjectBtn.addEventListener('click', () => {
+    addNewProjectTab(true, true);
+  });
+}
+
+// --- Cross-Tab Copy Popovers (Settings & Palettes) ---
+function hidePopoverSafe(popoverEl) {
+  if (!popoverEl) return;
+  if (typeof popoverEl.hidePopover === 'function') {
+    try { popoverEl.hidePopover(); } catch (e) {}
+  }
+  popoverEl.classList.remove('is-popover-open');
+}
+
+function wirePopover(triggerBtn, popoverEl, renderFn) {
+  if (!triggerBtn || !popoverEl) return;
+  const hasNativePopover = Object.hasOwn(HTMLElement.prototype, 'popover');
+
+  if (hasNativePopover) {
+    popoverEl.addEventListener('toggle', (e) => {
+      if (e.newState === 'open') renderFn();
+    });
+  } else {
+    triggerBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const willOpen = !popoverEl.classList.contains('is-popover-open');
+      document.querySelectorAll('.kawaii-popover.is-popover-open').forEach(p => p.classList.remove('is-popover-open'));
+      if (willOpen) {
+        renderFn();
+        popoverEl.classList.add('is-popover-open');
+      }
+    });
+    document.addEventListener('click', (e) => {
+      if (!popoverEl.contains(e.target) && e.target !== triggerBtn) {
+        popoverEl.classList.remove('is-popover-open');
+      }
+    });
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') popoverEl.classList.remove('is-popover-open');
+    });
+  }
+}
+
+function summarizeSettings(s) {
+  const ditherLabel = ditherInput?.querySelector(`option[value="${s.dither}"]`)?.textContent || s.dither;
+  return `${s.fps} FPS · ${s.scale}% · ${s.colors}c · ${ditherLabel}`;
+}
+
+function renderCopySettingsPopover() {
+  if (!copySettingsPopover) return;
+  const active = getActiveProject();
+  if (!active) return;
+
+  copySettingsPopover.innerHTML = '';
+  const heading = document.createElement('div');
+  heading.className = 'popover-heading';
+  heading.textContent = 'Copy settings from another tab';
+  copySettingsPopover.appendChild(heading);
+
+  const others = state.projects.filter(p => p.id !== active.id);
+  if (!others.length) {
+    const empty = document.createElement('p');
+    empty.className = 'popover-empty';
+    empty.textContent = 'Open another project tab (+ New Project) to copy presets between videos.';
+    copySettingsPopover.appendChild(empty);
+    return;
+  }
+
+  const list = document.createElement('div');
+  list.className = 'popover-list';
+
+  others.forEach((src) => {
+    const item = document.createElement('div');
+    item.className = 'popover-item';
+
+    const header = document.createElement('div');
+    header.className = 'popover-item-header';
+    const title = document.createElement('span');
+    title.className = 'popover-item-title';
+    title.textContent = src.name;
+    header.appendChild(title);
+
+    const meta = document.createElement('div');
+    meta.className = 'popover-item-meta';
+    meta.textContent = summarizeSettings(src.settings);
+
+    const actions = document.createElement('div');
+    actions.className = 'popover-item-actions';
+
+    const copyBtn = document.createElement('button');
+    copyBtn.type = 'button';
+    copyBtn.className = 'popover-action-btn';
+    copyBtn.textContent = 'Copy Settings';
+    copyBtn.addEventListener('click', () => {
+      active.settings = { ...src.settings };
+      applySettingsToControls(active.settings);
+      hidePopoverSafe(copySettingsPopover);
+    });
+    actions.appendChild(copyBtn);
+
+    if (src.palette?.colors?.length) {
+      const bothBtn = document.createElement('button');
+      bothBtn.type = 'button';
+      bothBtn.className = 'popover-action-btn alt';
+      bothBtn.textContent = '+ Palette';
+      bothBtn.addEventListener('click', () => {
+        active.settings = { ...src.settings };
+        active.palette = clonePalette(src.palette, {
+          edited: true,
+          hasExtracted: true,
+          sourceLabel: `Copied from ${src.name}`
+        });
+        applySettingsToControls(active.settings);
+        applyPaletteToUI(active.palette);
+        hidePopoverSafe(copySettingsPopover);
+      });
+      actions.appendChild(bothBtn);
+    }
+
+    item.appendChild(header);
+    item.appendChild(meta);
+    item.appendChild(actions);
+    list.appendChild(item);
+  });
+
+  copySettingsPopover.appendChild(list);
+
+  const applyAllBtn = document.createElement('button');
+  applyAllBtn.type = 'button';
+  applyAllBtn.className = 'popover-footer-btn';
+  applyAllBtn.textContent = 'Apply current settings to all tabs';
+  applyAllBtn.addEventListener('click', () => {
+    saveActiveProjectControls();
+    others.forEach((p) => {
+      p.settings = { ...active.settings };
+    });
+    hidePopoverSafe(copySettingsPopover);
+  });
+  copySettingsPopover.appendChild(applyAllBtn);
+}
+
+function hideCopyPalettePanel() {
+  if (copyPalettePanel) copyPalettePanel.classList.add('hidden');
+  if (copyPaletteFromBtn) copyPaletteFromBtn.setAttribute('aria-expanded', 'false');
+}
+
+function renderCopyPalettePanel() {
+  if (!copyPalettePanel) return;
+  const active = getActiveProject();
+  if (!active) return;
+
+  copyPalettePanel.innerHTML = '';
+  const heading = document.createElement('div');
+  heading.className = 'popover-heading';
+  heading.textContent = 'Copy palette between projects';
+  copyPalettePanel.appendChild(heading);
+
+  const sources = state.projects.filter(p => p.id !== active.id && p.palette?.colors?.length);
+  if (!sources.length) {
+    const empty = document.createElement('p');
+    empty.className = 'popover-empty';
+    empty.textContent = 'No palettes in other tabs yet. Extract or edit colors in any tab first!';
+    copyPalettePanel.appendChild(empty);
+  } else {
+    const list = document.createElement('div');
+    list.className = 'popover-list';
+
+    sources.forEach((src) => {
+      const item = document.createElement('div');
+      item.className = 'popover-item';
+
+      const header = document.createElement('div');
+      header.className = 'popover-item-header';
+      const title = document.createElement('span');
+      title.className = 'popover-item-title';
+      title.textContent = src.name;
+      const meta = document.createElement('span');
+      meta.className = 'popover-item-meta';
+      meta.textContent = `${src.palette.colors.length}c${src.palette.edited ? ' · Edited' : ''}`;
+      header.appendChild(title);
+      header.appendChild(meta);
+
+      const swatchesRow = document.createElement('div');
+      swatchesRow.className = 'popover-swatches';
+      const step = Math.max(1, Math.floor(src.palette.colors.length / 8));
+      for (let i = 0; i < src.palette.colors.length && swatchesRow.children.length < 8; i += step) {
+        const dot = document.createElement('span');
+        dot.className = 'popover-swatch-dot';
+        const c = src.palette.colors[i];
+        dot.style.backgroundColor = c.a === 0 ? '#ffffff' : c.hex;
+        swatchesRow.appendChild(dot);
+      }
+
+      const useBtn = document.createElement('button');
+      useBtn.type = 'button';
+      useBtn.className = 'popover-action-btn';
+      useBtn.textContent = 'Use This Palette';
+      useBtn.addEventListener('click', () => {
+        active.palette = clonePalette(src.palette, {
+          edited: true,
+          hasExtracted: true,
+          sourceLabel: `Copied from ${src.name}`
+        });
+        applyPaletteToUI(active.palette);
+        hideCopyPalettePanel();
+      });
+
+      item.appendChild(header);
+      item.appendChild(swatchesRow);
+      item.appendChild(useBtn);
+      list.appendChild(item);
+    });
+
+    copyPalettePanel.appendChild(list);
+  }
+
+  const others = state.projects.filter(p => p.id !== active.id);
+  if (active.palette?.colors?.length && others.length) {
+    const applyAllBtn = document.createElement('button');
+    applyAllBtn.type = 'button';
+    applyAllBtn.className = 'popover-footer-btn';
+    applyAllBtn.textContent = 'Apply active palette to all tabs';
+    applyAllBtn.addEventListener('click', () => {
+      others.forEach((p) => {
+        p.palette = clonePalette(active.palette, {
+          edited: true,
+          hasExtracted: true,
+          sourceLabel: `Copied from ${active.name}`
+        });
+      });
+      hideCopyPalettePanel();
+    });
+    copyPalettePanel.appendChild(applyAllBtn);
+  }
+}
+
+wirePopover(copySettingsFromBtn, copySettingsPopover, renderCopySettingsPopover);
+
+if (copyPaletteFromBtn && copyPalettePanel) {
+  copyPaletteFromBtn.addEventListener('click', () => {
+    const willOpen = copyPalettePanel.classList.contains('hidden');
+    if (willOpen) {
+      renderCopyPalettePanel();
+      copyPalettePanel.classList.remove('hidden');
+      copyPaletteFromBtn.setAttribute('aria-expanded', 'true');
+    } else {
+      hideCopyPalettePanel();
+    }
+  });
+}
+
+if (paletteDialog) {
+  enableDialogLightDismissFallback(paletteDialog);
+  paletteDialog.addEventListener('close', () => {
+    hideCopyPalettePanel();
+    if (pickerPanel) pickerPanel.classList.add('hidden');
+    paletteDialog.returnValue = '';
+  });
+  if (!('commandForElement' in HTMLButtonElement.prototype)) {
+    if (openPaletteBtn) {
+      openPaletteBtn.addEventListener('click', () => paletteDialog.showModal());
+    }
+    if (paletteDialogClose) {
+      paletteDialogClose.addEventListener('click', () => paletteDialog.close());
+    }
+  }
+}
+
+// --- File Handling & Native Probing ---
 function preventDefaults(e) {
   e.preventDefault();
   e.stopPropagation();
 }
 
-['dragenter', 'dragover'].forEach(eventName => {
-  dropZone.addEventListener(eventName, () => dropZone.classList.add('dragover'), false);
-});
-
-['dragleave', 'drop'].forEach(eventName => {
-  dropZone.addEventListener(eventName, () => dropZone.classList.remove('dragover'), false);
-});
-
-dropZone.addEventListener('drop', (e) => {
-  const files = e.dataTransfer.files;
-  if (files.length) handleFile(files[0]);
-});
-
-dropZone.addEventListener('click', () => {
+function openFilePicker(mode) {
+  pendingFileInputMode = mode;
   fileInput.click();
+}
+
+if (dropZone) {
+  ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+    dropZone.addEventListener(eventName, preventDefaults, false);
+  });
+  ['dragenter', 'dragover'].forEach(eventName => {
+    dropZone.addEventListener(eventName, () => dropZone.classList.add('dragover'), false);
+  });
+  ['dragleave', 'drop'].forEach(eventName => {
+    dropZone.addEventListener(eventName, () => dropZone.classList.remove('dragover'), false);
+  });
+  dropZone.addEventListener('drop', (e) => {
+    hideGlobalDropOverlay();
+    if (e.dataTransfer?.files?.length) {
+      handleIncomingFiles(e.dataTransfer.files, 'empty-or-new');
+    }
+  });
+  dropZone.addEventListener('click', () => openFilePicker('empty-or-new'));
+  dropZone.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      openFilePicker('empty-or-new');
+    }
+  });
+}
+
+if (browseBtn) {
+  browseBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    openFilePicker('empty-or-new');
+  });
+}
+
+if (replaceVideoBtn) {
+  replaceVideoBtn.addEventListener('click', () => {
+    openFilePicker('replace');
+  });
+}
+
+if (projectTabsBar) {
+  ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+    projectTabsBar.addEventListener(eventName, preventDefaults, false);
+  });
+  projectTabsBar.addEventListener('drop', (e) => {
+    hideGlobalDropOverlay();
+    if (e.dataTransfer?.files?.length) {
+      handleIncomingFiles(e.dataTransfer.files, 'new-tab');
+    }
+  });
+}
+
+let globalDragDepth = 0;
+function isFileDragEvent(e) {
+  return Array.from(e.dataTransfer?.types || []).includes('Files');
+}
+function hideGlobalDropOverlay() {
+  globalDragDepth = 0;
+  if (globalDropOverlay) globalDropOverlay.classList.add('hidden');
+}
+
+window.addEventListener('dragenter', (e) => {
+  if (!isFileDragEvent(e)) return;
+  e.preventDefault();
+  globalDragDepth += 1;
+  if (globalDropOverlay && !e.target.closest?.('#drop-zone')) {
+    globalDropOverlay.classList.remove('hidden');
+  }
 });
 
-fileInput.addEventListener('change', (e) => {
-  if (e.target.files.length) handleFile(e.target.files[0]);
+window.addEventListener('dragover', (e) => {
+  if (!isFileDragEvent(e)) return;
+  e.preventDefault();
 });
 
-async function handleFile(file) {
-  if (!file) return;
-  
-  dropZone.classList.add('uploading');
-  
-  state.file = file;
-  state.filename = file.name;
-  state.sizeBytes = file.size;
+window.addEventListener('dragleave', (e) => {
+  if (!isFileDragEvent(e)) return;
+  globalDragDepth = Math.max(0, globalDragDepth - 1);
+  if (globalDragDepth === 0) {
+    hideGlobalDropOverlay();
+  }
+});
+
+window.addEventListener('drop', (e) => {
+  if (!isFileDragEvent(e)) return;
+  e.preventDefault();
+  hideGlobalDropOverlay();
+  if (e.dataTransfer?.files?.length) {
+    handleIncomingFiles(e.dataTransfer.files, 'prompt');
+  }
+});
+
+if (fileInput) {
+  fileInput.addEventListener('change', (e) => {
+    if (e.target.files?.length) {
+      handleIncomingFiles(e.target.files, pendingFileInputMode);
+    }
+    fileInput.value = '';
+  });
+}
+
+function promptDropChoice(files) {
+  const active = getActiveProject();
+  if (!dropChoiceDialog || !active) return;
+
+  pendingDropFiles = Array.from(files);
+  if (dropChoiceMessage) {
+    dropChoiceMessage.textContent = pendingDropFiles.length === 1
+      ? `Add "${pendingDropFiles[0].name}"?`
+      : `Add ${pendingDropFiles.length} video files?`;
+  }
+  if (dropChoiceReplaceHint) {
+    dropChoiceReplaceHint.textContent = pendingDropFiles.length === 1
+      ? `Swap video in "${active.name}" (keeps your settings)`
+      : `Replace "${active.name}" with "${pendingDropFiles[0].name}" & open ${pendingDropFiles.length - 1} tab(s)`;
+  }
+
+  dropChoiceDialog.showModal();
+}
+
+if (dropChoiceClose && dropChoiceDialog) {
+  dropChoiceClose.addEventListener('click', () => {
+    dropChoiceDialog.close('cancel');
+  });
+}
+
+if (dropChoiceDialog) {
+  dropChoiceDialog.addEventListener('close', () => {
+    const choice = dropChoiceDialog.returnValue;
+    dropChoiceDialog.returnValue = '';
+    const files = pendingDropFiles;
+    pendingDropFiles = [];
+    if (!files.length || choice === 'cancel' || !choice) return;
+
+    if (choice === 'new-tab') {
+      handleIncomingFiles(files, 'new-tab');
+    } else if (choice === 'replace') {
+      handleIncomingFiles(files, 'replace');
+    }
+  });
+}
+
+async function handleIncomingFiles(fileList, mode = 'prompt') {
+  const files = Array.from(fileList || []).filter(Boolean);
+  if (!files.length) return;
+
+  const active = getActiveProject();
+  if (!active) return;
+
+  if (mode === 'new-tab') {
+    const firstNew = addNewProjectTab(true, true);
+    await loadFileIntoProject(files[0], firstNew, { resetPalette: false });
+    for (let i = 1; i < files.length; i++) {
+      const extra = addNewProjectTab(false, true);
+      await loadFileIntoProject(files[i], extra, { resetPalette: false });
+    }
+    return;
+  }
+
+  if (mode === 'replace') {
+    await loadFileIntoProject(files[0], active, { resetPalette: !active.palette.edited });
+    for (let i = 1; i < files.length; i++) {
+      const extra = addNewProjectTab(false, true);
+      await loadFileIntoProject(files[i], extra, { resetPalette: false });
+    }
+    return;
+  }
+
+  // 'empty-or-new' or 'prompt'
+  if (!active.file) {
+    await loadFileIntoProject(files[0], active, { resetPalette: false });
+    for (let i = 1; i < files.length; i++) {
+      const extra = addNewProjectTab(false, true);
+      await loadFileIntoProject(files[i], extra, { resetPalette: false });
+    }
+    return;
+  }
+
+  promptDropChoice(files);
+}
+
+async function loadFileIntoProject(file, project, options = {}) {
+  if (!file || !project) return;
+  if (!state.ffmpegLoaded) {
+    alert('WebAssembly engine is still loading, please wait a moment!');
+    return;
+  }
+
+  const isActive = project.id === state.activeProjectId;
+  if (isActive && dropZone) dropZone.classList.add('uploading');
 
   try {
-    // Gather geometry size from the new source file directly using FFmpeg, 
-    // avoiding browser DOM / video tag memory caching issues.
-    const { fetchFile } = FFmpegUtil;
-    const probeName = 'probe_' + Date.now() + '.' + state.filename.split('.').pop();
-    await state.ffmpeg.writeFile(probeName, await fetchFile(file));
+    const probed = await runInFFmpegQueue(async () => {
+      const { fetchFile } = FFmpegUtil;
+      const ext = file.name.split('.').pop();
+      const probeName = `probe_${Date.now()}_${Math.random().toString(36).slice(2, 6)}.${ext}`;
+      await state.ffmpeg.writeFile(probeName, await fetchFile(file));
 
-    let probedW = 0;
-    let probedH = 0;
-    let probedDuration = 0;
+      let probedW = 0;
+      let probedH = 0;
+      let probedDuration = 0;
 
-    const probeLogHandler = ({ message }) => {
-      const dimMatch = message.match(/Video:.*?\s(\d{2,5})x(\d{2,5})\b/);
-      if (dimMatch && !probedW) {
-        probedW = parseInt(dimMatch[1], 10);
-        probedH = parseInt(dimMatch[2], 10);
+      const probeLogHandler = ({ message }) => {
+        const dimMatch = message.match(/Video:.*?\s(\d{2,5})x(\d{2,5})\b/);
+        if (dimMatch && !probedW) {
+          probedW = parseInt(dimMatch[1], 10);
+          probedH = parseInt(dimMatch[2], 10);
+        }
+        const durMatch = message.match(/Duration:\s*(\d{2}):(\d{2}):(\d{2}\.\d+)/);
+        if (durMatch && !probedDuration) {
+          const h = parseInt(durMatch[1], 10);
+          const m = parseInt(durMatch[2], 10);
+          const s = parseFloat(durMatch[3]);
+          probedDuration = h * 3600 + m * 60 + s;
+        }
+      };
+
+      state.ffmpeg.on('log', probeLogHandler);
+      try {
+        await state.ffmpeg.exec(['-i', probeName]);
+      } finally {
+        state.ffmpeg.off('log', probeLogHandler);
+        try { await state.ffmpeg.deleteFile(probeName); } catch (e) {}
       }
-      const durMatch = message.match(/Duration:\s*(\d{2}):(\d{2}):(\d{2}\.\d+)/);
-      if (durMatch && !probedDuration) {
-        const h = parseInt(durMatch[1], 10);
-        const m = parseInt(durMatch[2], 10);
-        const s = parseFloat(durMatch[3]);
-        probedDuration = h * 3600 + m * 60 + s;
-      }
-    };
 
-    state.ffmpeg.on('log', probeLogHandler);
-    await state.ffmpeg.exec(['-i', probeName]);
-    state.ffmpeg.off('log', probeLogHandler);
-
-    try {
-      await state.ffmpeg.deleteFile(probeName);
-    } catch (e) {}
-
-    state.durationSeconds = probedDuration || 5;
-    state.width = probedW || 640;
-    state.height = probedH || 360;
-
-    // Update UI elements
-    fileNameEl.textContent = state.filename;
-    fileSizeEl.textContent = formatBytes(state.sizeBytes);
-    fileDurationEl.textContent = formatTime(state.durationSeconds);
-    fileDimsEl.textContent = `${state.width}x${state.height}`;
-    
-    // Transition views
-    uploadSection.classList.add('hidden');
-    workspaceSection.classList.remove('hidden');
-    
-    dropZone.classList.remove('uploading');
-    resetCrop();
-    updateScaleHint();
-    if (trimStartSlider) trimStartSlider.value = 0;
-    if (trimEndSlider) trimEndSlider.value = 0;
-    updateTrimControls();
-    requestAnimationFrame(() => {
-      layoutMediaStage();
-      tryAttachTrimPreview(file);
+      return {
+        durationSeconds: probedDuration || 5,
+        width: probedW || 640,
+        height: probedH || 360
+      };
     });
-    fileInput.value = '';
-    
+
+    project.file = file;
+    project.filename = file.name;
+    project.sizeBytes = file.size;
+    project.durationSeconds = probed.durationSeconds;
+    project.width = probed.width;
+    project.height = probed.height;
+    project.crop = { left: 0, right: 0, top: 0, bottom: 0 };
+    project.trim = { cutStart: 0, cutEnd: 0 };
+
+    if (!project.customName) {
+      project.name = file.name.replace(/\.[^.]+$/, '') || file.name;
+    }
+    if (options.resetPalette) {
+      project.palette = createEmptyPalette();
+    }
+
+    renderProjectTabs();
+    if (project.id === state.activeProjectId) {
+      renderActiveProjectWorkspace();
+    }
   } catch (err) {
     alert('Failed to read video details: ' + err.message);
-    dropZone.classList.remove('uploading');
-    fileInput.value = '';
+  } finally {
+    if (dropZone) dropZone.classList.remove('uploading');
   }
 }
 
@@ -1466,27 +2528,30 @@ async function handleFile(file) {
 convertBtn.addEventListener('click', startConversion);
 
 async function startConversion() {
-  if (!state.ffmpegLoaded || !state.file) return;
+  const project = getActiveProject();
+  if (!state.ffmpegLoaded || !project || !project.file) return;
+
+  saveActiveProjectControls();
 
   const { width, height } = getOutputDimensions();
-  const fps = parseInt(fpsSlider.value, 10);
-  const colors = parseInt(colorsSlider.value, 10);
-  const trans = transparencyToggle.checked ? 'yes' : 'no';
-  const ditherSelect = document.getElementById('dither');
-  const dither = ditherSelect.value;
-  const ditherText = ditherSelect.options[ditherSelect.selectedIndex].text;
+  const s = { ...project.settings };
+  const fps = s.fps;
+  const colors = s.colors;
+  const trans = s.transparency ? 'yes' : 'no';
+  const dither = s.dither;
+  const ditherText = ditherInput.options[ditherInput.selectedIndex]?.text || dither;
+  const playback = s.playback;
+  const playbackText = playbackInput.options[playbackInput.selectedIndex]?.text || playback;
 
-  const playbackSelect = document.getElementById('playback');
-  const playback = playbackSelect.value;
-  const playbackText = playbackSelect.options[playbackSelect.selectedIndex].text;
-
-  // Generate unique conversion ID
   const conversionId = Math.random().toString(36).substring(2, 9) + Date.now().toString(36);
 
   const trim = getTrimState();
   const crop = getCropState();
+  const paletteSnap = clonePalette(project.palette);
+  const useCustomPalette = !!(paletteSnap.edited && paletteSnap.dataUrl);
+
   const settingsData = {
-    scale: scaleSlider.value,
+    scale: String(s.scale),
     fps,
     colors,
     trans,
@@ -1500,209 +2565,210 @@ async function startConversion() {
     cropRight: crop.right,
     cropTop: crop.top,
     cropBottom: crop.bottom,
-    denoise: !!(denoiseToggle && denoiseToggle.checked),
-    dropDupes: !!(dropDupesToggle && dropDupesToggle.checked),
-    diffRect: !!(diffRectToggle && diffRectToggle.checked),
-    paletteEdited: state.customPaletteEdited,
-    paletteDataUrl: null
+    denoise: !!s.denoise,
+    dropDupes: !!s.dropDupes,
+    diffRect: !!s.diffRect,
+    paletteEdited: useCustomPalette,
+    paletteDataUrl: useCustomPalette ? paletteSnap.dataUrl : null
   };
-  if (state.customPaletteEdited) {
-    settingsData.paletteDataUrl = paletteCanvas.toDataURL('image/png');
+
+  // Instantiation of polaroid card bound to this project
+  const card = createResultCard(conversionId, { width, height, ...settingsData }, project.id);
+  card.el.settingsData = settingsData;
+
+  project.cards.unshift(card.el);
+  project.pendingJobs += 1;
+  renderProjectTabs();
+
+  if (project.id === state.activeProjectId) {
+    emptyState.classList.add('hidden');
+    resultsFeed.insertBefore(card.el, resultsFeed.firstChild);
+    document.querySelector('.workspace-results')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
 
-  // Instantiation of polaroid card
-  const card = createResultCard(conversionId, { width, height, ...settingsData });
-  card.el.settingsData = settingsData;
-  emptyState.classList.add('hidden');
-  resultsFeed.insertBefore(card.el, resultsFeed.firstChild);
+  if (state.ffmpegBusy) {
+    card.progressStage.textContent = 'Queued (waiting for engine)...';
+    card.progressFill.style.width = '2%';
+    card.progressPercent.textContent = '2%';
+  }
 
-  // Auto-scroll to results feed
-  document.querySelector('.workspace-results').scrollIntoView({ behavior: 'smooth', block: 'start' });
-
-  // Cancellation binder
   let isCancelled = false;
-  card.deleteBtn.addEventListener('click', async () => {
+  card.deleteBtn.addEventListener('click', () => {
     isCancelled = true;
+    const idx = project.cards.indexOf(card.el);
+    if (idx !== -1) project.cards.splice(idx, 1);
+    const link = card.downloadBtn;
+    if (link?.href && link.href.startsWith('blob:')) {
+      URL.revokeObjectURL(link.href);
+    }
     card.el.remove();
-    checkEmptyState();
+    renderProjectTabs();
+    if (project.id === state.activeProjectId) {
+      checkEmptyState();
+    }
   });
 
+  const jobFile = project.file;
+  const jobFilename = project.filename;
+
   try {
-    // 1. Write the input file to the WebAssembly Virtual Filesystem
-    card.progressStage.textContent = 'Storing file in memory...';
-    card.progressFill.style.width = `6%`;
-    card.progressPercent.textContent = `6%`;
+    await runInFFmpegQueue(async () => {
+      if (isCancelled || !getProjectById(project.id)) return;
 
-    const { fetchFile } = FFmpegUtil;
-    const inputName = 'input_' + conversionId + '.' + state.filename.split('.').pop();
-    await state.ffmpeg.writeFile(inputName, await fetchFile(state.file));
+      card.progressStage.textContent = 'Storing file in memory...';
+      card.progressFill.style.width = '6%';
+      card.progressPercent.textContent = '6%';
 
-    if (isCancelled) {
-      await state.ffmpeg.deleteFile(inputName);
-      return;
-    }
+      const { fetchFile } = FFmpegUtil;
+      const ext = jobFilename.split('.').pop();
+      const inputName = `input_${conversionId}.${ext}`;
+      const paletteName = `palette_${conversionId}.png`;
+      const gifName = `output_${conversionId}.gif`;
 
-    const paletteName = `palette_${conversionId}.png`;
-    const gifName = `output_${conversionId}.gif`;
-
-    // Write custom palette image to FS if edited
-    if (state.customPaletteEdited) {
-      card.progressStage.textContent = 'Injecting custom colors...';
-      const paletteBlob = await new Promise(resolve => paletteCanvas.toBlob(resolve, 'image/png'));
-      const buffer = await paletteBlob.arrayBuffer();
-      await state.ffmpeg.writeFile(paletteName, new Uint8Array(buffer));
-    }
-
-    if (isCancelled) {
-      await state.ffmpeg.deleteFile(inputName);
       try {
-        await state.ffmpeg.deleteFile(paletteName);
-      } catch (e) {}
-      return;
-    }
+        await state.ffmpeg.writeFile(inputName, await fetchFile(jobFile));
+        if (isCancelled) return;
 
-    // 2. Attach progress event listener
-    state.ffmpeg.on('progress', ({ progress }) => {
-      if (isCancelled) return;
-      // Map progress range from 10% to 96%
-      const p = Math.round(10 + progress * 86);
-      card.progressFill.style.width = `${p}%`;
-      card.progressPercent.textContent = `${p}%`;
-
-      if (state.customPaletteEdited) {
-        card.progressStage.textContent = 'Rendering cute GIF with custom colors...';
-      } else {
-        if (progress < 0.35) {
-          card.progressStage.textContent = 'Analyzing color palette...';
-        } else {
-          card.progressStage.textContent = 'Rendering cute GIF...';
+        if (useCustomPalette) {
+          card.progressStage.textContent = 'Injecting custom colors...';
+          const paletteResp = await fetch(paletteSnap.dataUrl);
+          const buffer = await paletteResp.arrayBuffer();
+          await state.ffmpeg.writeFile(paletteName, new Uint8Array(buffer));
         }
+
+        if (isCancelled) return;
+
+        state.activeProgressHandler = (progress) => {
+          if (isCancelled) return;
+          const p = Math.max(10, Math.min(96, Math.round(10 + progress * 86)));
+          card.progressFill.style.width = `${p}%`;
+          card.progressPercent.textContent = `${p}%`;
+
+          if (useCustomPalette) {
+            card.progressStage.textContent = 'Rendering cute GIF with custom colors...';
+          } else if (progress < 0.35) {
+            card.progressStage.textContent = 'Analyzing color palette...';
+          } else {
+            card.progressStage.textContent = 'Rendering cute GIF...';
+          }
+        };
+
+        const filterSource = composeGifFilterGraph({
+          fps,
+          width,
+          height,
+          playback,
+          crop,
+          denoise: settingsData.denoise,
+          dropDupes: settingsData.dropDupes
+        });
+
+        const palettegenOpts = `max_colors=${colors}` + (trans === 'yes' ? ':reserve_transparent=1' : '');
+        let paletteuseOpts = (trans === 'yes' ? 'alpha_threshold=128:' : '') + `dither=${dither}`;
+        if (settingsData.diffRect) {
+          paletteuseOpts += ':diff_mode=rectangle';
+        }
+
+        if (!useCustomPalette) {
+          const pass1FilterArgs = playback === 'pingpong'
+            ? ['-filter_complex', `${filterSource},palettegen=${palettegenOpts}`]
+            : ['-vf', `${filterSource},palettegen=${palettegenOpts}`];
+
+          await state.ffmpeg.exec([
+            ...getTrimInputArgs(trim),
+            '-i', inputName,
+            ...pass1FilterArgs,
+            '-y', paletteName
+          ]);
+
+          try {
+            const palData = await state.ffmpeg.readFile(paletteName);
+            const palBlob = new Blob([palData.buffer], { type: 'image/png' });
+            const reader = new FileReader();
+            reader.onload = () => {
+              card.el.settingsData.paletteDataUrl = reader.result;
+            };
+            reader.readAsDataURL(palBlob);
+          } catch (e) {
+            console.error('Could not capture auto-generated palette for copy settings:', e);
+          }
+        }
+
+        if (isCancelled) return;
+
+        const loopArg = (playback === 'once') ? '-1' : '0';
+        await state.ffmpeg.exec([
+          ...getTrimInputArgs(trim),
+          '-i', inputName,
+          '-i', paletteName,
+          '-filter_complex', `${filterSource}[x];[x][1:v]paletteuse=${paletteuseOpts}`,
+          '-loop', loopArg,
+          '-y', gifName
+        ]);
+
+        if (isCancelled) return;
+
+        const data = await state.ffmpeg.readFile(gifName);
+        const gifBlob = new Blob([data.buffer], { type: 'image/gif' });
+        const gifUrl = URL.createObjectURL(gifBlob);
+
+        card.progressContainer.classList.add('hidden');
+        card.resultContent.classList.remove('hidden');
+        card.img.src = gifUrl;
+        card.sizeEl.textContent = formatBytes(gifBlob.size);
+        card.downloadBtn.href = gifUrl;
+
+        const imgObj = new Image();
+        imgObj.onload = () => {
+          const realW = imgObj.naturalWidth || width || 640;
+          const realH = imgObj.naturalHeight || height || 360;
+          card.dimsEl.textContent = `${realW}x${realH}`;
+
+          const badgesContainer = card.el.querySelector('.result-badges');
+          let resBadge = Array.from(badgesContainer.querySelectorAll('.badge')).find(b => /^\d+x\d+$/.test(b.textContent));
+          if (resBadge) {
+            resBadge.textContent = `${realW}x${realH}`;
+          } else {
+            const span = document.createElement('span');
+            span.className = 'badge';
+            span.textContent = `${realW}x${realH}`;
+            badgesContainer.appendChild(span);
+          }
+
+          card.downloadBtn.download = `${jobFilename.split('.')[0]}_${realW}x${realH}_${colors}_${dither}.gif`;
+          card.el.dataset.size = gifBlob.size;
+          if (project.id === state.activeProjectId) {
+            sortResultsFeed();
+          }
+        };
+        imgObj.src = gifUrl;
+      } finally {
+        state.activeProgressHandler = null;
+        try { await state.ffmpeg.deleteFile(inputName); } catch (e) {}
+        try { await state.ffmpeg.deleteFile(paletteName); } catch (e) {}
+        try { await state.ffmpeg.deleteFile(gifName); } catch (e) {}
       }
     });
-
-    // 3. Prepare filters
-    const filterSource = buildGifFilterGraph(fps, width, height, playback);
-
-    const palettegenOpts = `max_colors=${colors}` + (trans === 'yes' ? ':reserve_transparent=1' : '');
-    let paletteuseOpts = (trans === 'yes' ? 'alpha_threshold=128:' : '') + `dither=${dither}`;
-    if (diffRectToggle && diffRectToggle.checked) {
-      paletteuseOpts += ':diff_mode=rectangle';
-    }
-
-    // 4. Exec Pass 1: Palette Analysis (Only if not using custom palette!)
-    if (!state.customPaletteEdited) {
-      const pass1FilterArgs = playback === 'pingpong' 
-        ? ['-filter_complex', `${filterSource},palettegen=${palettegenOpts}`]
-        : ['-vf', `${filterSource},palettegen=${palettegenOpts}`];
-
-      await state.ffmpeg.exec([
-        ...getTrimInputArgs(),
-        '-i', inputName,
-        ...pass1FilterArgs,
-        '-y', paletteName
-      ]);
-
-      // Capture the generated palette for the "Copy Settings" feature
-      try {
-        const palData = await state.ffmpeg.readFile(paletteName);
-        const palBlob = new Blob([palData.buffer], { type: 'image/png' });
-        const reader = new FileReader();
-        reader.onload = () => {
-          card.el.settingsData.paletteDataUrl = reader.result;
-        };
-        reader.readAsDataURL(palBlob);
-      } catch (e) {
-        console.error('Could not capture auto-generated palette for copy settings:', e);
-      }
-    }
-
-    if (isCancelled) {
-      await state.ffmpeg.deleteFile(inputName);
-      await state.ffmpeg.deleteFile(paletteName);
-      return;
-    }
-
-    // 5. Exec Pass 2: Pixel Dithering & GIF compilation
-    const loopArg = (playback === 'once') ? '-1' : '0';
-
-    await state.ffmpeg.exec([
-      ...getTrimInputArgs(),
-      '-i', inputName,
-      '-i', paletteName,
-      '-filter_complex', `${filterSource}[x];[x][1:v]paletteuse=${paletteuseOpts}`,
-      '-loop', loopArg,
-      '-y', gifName
-    ]);
-
-    if (isCancelled) {
-      await state.ffmpeg.deleteFile(inputName);
-      await state.ffmpeg.deleteFile(paletteName);
-      await state.ffmpeg.deleteFile(gifName);
-      return;
-    }
-
-    // 6. Read completed GIF from Wasm RAM
-    const data = await state.ffmpeg.readFile(gifName);
-    const gifBlob = new Blob([data.buffer], { type: 'image/gif' });
-    const gifUrl = URL.createObjectURL(gifBlob);
-
-    // 7. Update layout card
-    card.progressContainer.classList.add('hidden');
-    card.resultContent.classList.remove('hidden');
-
-    card.img.src = gifUrl;
-    card.sizeEl.textContent = formatBytes(gifBlob.size);
-    
-    // Determine actual output resolution asynchronously and bind proper filename
-    const imgObj = new Image();
-    imgObj.onload = () => {
-      const realW = imgObj.naturalWidth || width || 640;
-      const realH = imgObj.naturalHeight || height || 360;
-      
-      card.dimsEl.textContent = `${realW}x${realH}`;
-      
-      // Update or create the resolution badge
-      const badgesContainer = card.el.querySelector('.result-badges');
-      let resBadge = Array.from(badgesContainer.querySelectorAll('.badge')).find(b => /^\d+x\d+$/.test(b.textContent));
-      if (resBadge) {
-        resBadge.textContent = `${realW}x${realH}`;
-      } else {
-        const span = document.createElement('span');
-        span.className = 'badge';
-        span.textContent = `${realW}x${realH}`;
-        badgesContainer.appendChild(span);
-      }
-      
-      card.downloadBtn.download = `${state.filename.split('.')[0]}_${realW}x${realH}_${colors}_${dither}.gif`;
-      
-      card.el.dataset.size = gifBlob.size;
-      sortResultsFeed();
-    };
-    imgObj.src = gifUrl;
-    
-    // Bind downloads
-    card.downloadBtn.href = gifUrl;
-
-    // 8. CRITICAL: Clean up memory files in Wasm FS immediately to prevent heap OOM crashes
-    await state.ffmpeg.deleteFile(inputName);
-    await state.ffmpeg.deleteFile(paletteName);
-    await state.ffmpeg.deleteFile(gifName);
-
   } catch (err) {
     console.error('Wasm transcode failed:', err);
     card.progressContainer.classList.add('hidden');
     card.errorContent.classList.remove('hidden');
     card.errorContent.querySelector('.error-text').textContent = 'Conversion failed: ' + err.message;
-    
     card.el.dataset.size = 999999999999;
-    sortResultsFeed();
+    if (project.id === state.activeProjectId) {
+      sortResultsFeed();
+    }
+  } finally {
+    project.pendingJobs = Math.max(0, project.pendingJobs - 1);
+    renderProjectTabs();
   }
 }
 
-function createResultCard(id, settings) {
+function createResultCard(id, settings, projectId) {
   const template = cardTemplate.content.cloneNode(true);
   const el = template.querySelector('.result-card');
   el.dataset.id = id;
+  el.dataset.projectId = projectId || '';
   el.dataset.size = -1;
   el.dataset.timestamp = Date.now();
   el.dataset.fps = settings.fps || 0;
@@ -1746,20 +2812,27 @@ function createResultCard(id, settings) {
   if (copyBtn) {
     copyBtn.addEventListener('click', () => {
       const sData = el.settingsData;
-      if (!sData) return;
-      
-      fpsSlider.value = sData.fps;
-      fpsSlider.dispatchEvent(new Event('input'));
-      colorsSlider.value = sData.colors;
-      colorsSlider.dispatchEvent(new Event('input'));
-      scaleSlider.value = sData.scale;
-      scaleSlider.dispatchEvent(new Event('input'));
+      const project = getActiveProject();
+      if (!sData || !project) return;
+
+      project.settings = {
+        fps: parseInt(sData.fps, 10) || 12,
+        scale: parseInt(sData.scale, 10) || 100,
+        colors: parseInt(sData.colors, 10) || 64,
+        transparency: sData.trans === 'yes',
+        dither: sData.dither || 'floyd_steinberg',
+        playback: sData.playback || 'loop',
+        denoise: !!sData.denoise,
+        dropDupes: !!sData.dropDupes,
+        diffRect: !!sData.diffRect
+      };
+      applySettingsToControls(project.settings);
 
       if (trimStartSlider) trimStartSlider.value = sData.cutStart || 0;
       if (trimEndSlider) trimEndSlider.value = sData.cutEnd || 0;
       updateTrimControls();
 
-      state.crop = {
+      project.crop = {
         left: sData.cropLeft || 0,
         right: sData.cropRight || 0,
         top: sData.cropTop || 0,
@@ -1767,40 +2840,18 @@ function createResultCard(id, settings) {
       };
       layoutMediaStage();
       updateCropUI();
-      
-      transparencyToggle.checked = (sData.trans === 'yes');
-      transparencyToggle.dispatchEvent(new Event('change'));
 
-      if (denoiseToggle) {
-        denoiseToggle.checked = !!sData.denoise;
-        denoiseToggle.dispatchEvent(new Event('change'));
-      }
-      if (dropDupesToggle) {
-        dropDupesToggle.checked = !!sData.dropDupes;
-        dropDupesToggle.dispatchEvent(new Event('change'));
-      }
-      if (diffRectToggle) {
-        diffRectToggle.checked = !!sData.diffRect;
-        diffRectToggle.dispatchEvent(new Event('change'));
-      }
-      
-      document.getElementById('dither').value = sData.dither;
-      if (sData.playback) {
-        document.getElementById('playback').value = sData.playback;
-      }
-      
       if (sData.paletteDataUrl) {
         const img = new Image();
         img.onload = () => {
-          loadPaletteFromImage(img, true);
+          loadPaletteFromImage(img, true, project, 'Restored from render card');
         };
         img.src = sData.paletteDataUrl;
       } else {
-        state.customPaletteEdited = false;
-        if (paletteGridContainer) paletteGridContainer.classList.add('hidden');
+        project.palette = createEmptyPalette();
+        applyPaletteToUI(project.palette);
       }
 
-      // Auto-scroll to settings panel (skipping palette editor)
       const settingsSection = document.querySelector('.workspace-sidebar');
       if (settingsSection) {
         settingsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -1827,44 +2878,8 @@ function createResultCard(id, settings) {
 
 function checkEmptyState() {
   const hasCards = resultsFeed.querySelectorAll('.result-card').length > 0;
-  if (!hasCards) {
-    emptyState.classList.remove('hidden');
-  }
+  emptyState.classList.toggle('hidden', hasCards);
 }
-
-// --- Close Session ---
-closeSessionBtn.addEventListener('click', () => {
-  // Reset states for the new video
-  state.file = null;
-  state.filename = null;
-  state.sizeBytes = 0;
-  state.durationSeconds = 0;
-  state.width = 0;
-  state.height = 0;
-  resetCrop();
-
-  clearTrimPreview();
-  if (trimStartSlider) trimStartSlider.value = 0;
-  if (trimEndSlider) trimEndSlider.value = 0;
-  updateTrimControls();
-  
-  // Explicitly reset the palette for the new video
-  state.customPaletteEdited = false;
-  state.customPaletteColors = [];
-
-  // Reset Palette UI
-  if (paletteGrid) paletteGrid.innerHTML = '';
-  if (paletteGridContainer) paletteGridContainer.classList.add('hidden');
-  if (pickerPanel) pickerPanel.classList.add('hidden');
-
-  // Switch views back to upload
-  workspaceSection.classList.add('hidden');
-  uploadSection.classList.remove('hidden');
-  
-  // Note: We intentionally do NOT purge result cards here,
-  // allowing the user to compare GIFs from different source videos side-by-side.
-  // The control sliders (FPS, Colors, etc) also retain their current values naturally.
-});
 
 // --- Full-Size GIF Modal Logic ---
 const gifModal = document.getElementById('gif-modal');
@@ -1873,7 +2888,6 @@ const gifModalCaption = document.getElementById('gif-modal-caption');
 const gifModalClose = document.querySelector('.gif-modal-close');
 
 if (gifModal && gifModalImg && gifModalClose) {
-  // Delegated click event: listen on the results feed for polaroid preview clicks
   resultsFeed.addEventListener('click', (e) => {
     const preview = e.target.closest('.result-preview');
     if (preview) {
@@ -1881,7 +2895,6 @@ if (gifModal && gifModalImg && gifModalClose) {
       const cardEl = preview.closest('.result-card');
       
       if (img && img.src) {
-        // Gather settings badges for a cute caption text
         let captionText = 'GIF Preview';
         if (cardEl) {
           const badges = Array.from(cardEl.querySelectorAll('.badge')).map(b => b.textContent);
@@ -1890,7 +2903,6 @@ if (gifModal && gifModalImg && gifModalClose) {
           }
         }
         
-        // Display the modal
         gifModalImg.src = img.src;
         gifModalCaption.textContent = captionText;
         gifModal.classList.remove('hidden');
@@ -1899,24 +2911,16 @@ if (gifModal && gifModalImg && gifModalClose) {
     }
   });
 
-  // Close modal function
   const closeModal = () => {
     gifModal.classList.add('hidden');
     gifModal.setAttribute('aria-hidden', 'true');
     gifModalImg.src = '';
   };
 
-  // Close on click close button
   gifModalClose.addEventListener('click', closeModal);
-
-  // Close by clicking backdrop
   gifModal.addEventListener('click', (e) => {
-    if (e.target === gifModal) {
-      closeModal();
-    }
+    if (e.target === gifModal) closeModal();
   });
-
-  // Close on Escape keypress
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && !gifModal.classList.contains('hidden')) {
       closeModal();
@@ -1936,32 +2940,30 @@ function sortResultsFeed() {
     const timeA = parseInt(a.dataset.timestamp || 0, 10);
     const timeB = parseInt(b.dataset.timestamp || 0, 10);
     
-    // Keep converting cards (size -1) at the top of the list
     if (sizeA === -1 && sizeB === -1) return timeB - timeA;
     if (sizeA === -1) return -1;
     if (sizeB === -1) return 1;
     
     if (sortMode === 'size') {
-      if (sizeA !== sizeB) return sizeA - sizeB; // Ascending order
+      if (sizeA !== sizeB) return sizeA - sizeB;
     } else if (sortMode === 'fps') {
       const fpsA = parseInt(a.dataset.fps || 0, 10);
       const fpsB = parseInt(b.dataset.fps || 0, 10);
-      if (fpsA !== fpsB) return fpsA - fpsB; // Ascending order
+      if (fpsA !== fpsB) return fpsA - fpsB;
     } else if (sortMode === 'colors') {
       const colorsA = parseInt(a.dataset.colors || 0, 10);
       const colorsB = parseInt(b.dataset.colors || 0, 10);
-      if (colorsA !== colorsB) return colorsA - colorsB; // Ascending order
+      if (colorsA !== colorsB) return colorsA - colorsB;
     } else if (sortMode === 'dither') {
       const ditherA = a.dataset.dither || '';
       const ditherB = b.dataset.dither || '';
       const cmp = ditherA.localeCompare(ditherB);
-      if (cmp !== 0) return cmp; // Alphabetical
+      if (cmp !== 0) return cmp;
     }
     
-    return timeB - timeA; // Newest first fallback
+    return timeB - timeA;
   });
   
-  // Re-append to order elements dynamically in DOM
   cards.forEach(card => resultsFeed.appendChild(card));
 }
 
@@ -1971,6 +2973,25 @@ if (sortSelectEl) {
 }
 
 // --- Bubbly Modal Dialogs Control ---
+function enableDialogLightDismissFallback(dialog) {
+  if (!dialog || ('closedBy' in HTMLDialogElement.prototype)) return;
+  const outside = (e) => {
+    const r = dialog.getBoundingClientRect();
+    return e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom;
+  };
+  let pressedOutside = false;
+  dialog.addEventListener('pointerdown', (e) => {
+    pressedOutside = outside(e);
+  });
+  dialog.addEventListener('pointerup', (e) => {
+    if (pressedOutside && outside(e)) {
+      dialog.close('cancel');
+    }
+  });
+}
+
+enableDialogLightDismissFallback(dropChoiceDialog);
+
 const setupCuteDialog = (btnId, dialogId) => {
   const btn = document.getElementById(btnId);
   const dialog = document.getElementById(dialogId);
@@ -1980,27 +3001,141 @@ const setupCuteDialog = (btnId, dialogId) => {
     dialog.showModal();
   });
 
-  // Fallback for browsers without native closedby support
-  if (!('closedBy' in HTMLDialogElement.prototype)) {
-    dialog.addEventListener('click', (event) => {
-      if (event.target !== dialog) return;
-      const rect = dialog.getBoundingClientRect();
-      const isDialogContent = (
-        rect.top <= event.clientY &&
-        event.clientY <= rect.top + rect.height &&
-        rect.left <= event.clientX &&
-        event.clientX <= rect.left + rect.width
-      );
-      if (!isDialogContent) {
-        dialog.close();
-      }
-    });
-  }
+  enableDialogLightDismissFallback(dialog);
 };
 
 setupCuteDialog('footer-about', 'about-dialog');
 setupCuteDialog('footer-terms', 'terms-dialog');
 setupCuteDialog('footer-privacy', 'privacy-dialog');
+
+// --- Control Hover & Focus Tooltips ---
+function initControlHoverTooltips() {
+  const groups = Array.from(document.querySelectorAll('[data-hint-target]'));
+  if (!groups.length) return;
+
+  const hasNativePopover = Object.hasOwn(HTMLElement.prototype, 'popover');
+  if (hasNativePopover) {
+    const probe = document.createElement('div');
+    probe.popover = 'hint';
+    if (probe.popover !== 'hint') {
+      document.querySelectorAll('.kawaii-tooltip[popover="hint"]').forEach((tip) => {
+        tip.setAttribute('popover', 'auto');
+      });
+    }
+  }
+
+  let openTimer = null;
+  let closeTimer = null;
+  let currentOpenTip = null;
+  let activeGroup = null;
+  let suppressedGroup = null;
+
+  const positionTooltip = (anchorEl, tip) => {
+    if (!anchorEl || !tip) return;
+    const ar = anchorEl.getBoundingClientRect();
+    const tp = tip.getBoundingClientRect();
+    const gap = 8;
+    let top = ar.top - tp.height - gap;
+    if (top < 8) {
+      top = ar.bottom + gap;
+    }
+    let left = ar.left + ar.width / 2 - tp.width / 2;
+    left = Math.max(8, Math.min(left, (window.innerWidth || 1024) - tp.width - 8));
+    tip.style.top = `${Math.round(top)}px`;
+    tip.style.left = `${Math.round(left)}px`;
+  };
+
+  const showTip = (group, tip) => {
+    if (currentOpenTip && currentOpenTip !== tip) {
+      hideTip(currentOpenTip);
+    }
+    if (hasNativePopover && typeof tip.showPopover === 'function') {
+      try { tip.showPopover(); } catch (e) {}
+    } else {
+      tip.classList.add('is-tooltip-open');
+    }
+    currentOpenTip = tip;
+    activeGroup = group;
+    const anchor = group.querySelector('.slider-header') || group;
+    positionTooltip(anchor, tip);
+  };
+
+  const hideTip = (tip) => {
+    if (!tip) return;
+    if (hasNativePopover && typeof tip.hidePopover === 'function') {
+      try { tip.hidePopover(); } catch (e) {}
+    } else {
+      tip.classList.remove('is-tooltip-open');
+    }
+    if (currentOpenTip === tip) {
+      currentOpenTip = null;
+      activeGroup = null;
+    }
+  };
+
+  groups.forEach((group) => {
+    const tip = document.getElementById(group.dataset.hintTarget);
+    if (!tip) return;
+
+    group.addEventListener('pointerenter', () => {
+      if (suppressedGroup === group) return;
+      clearTimeout(closeTimer);
+      clearTimeout(openTimer);
+      const delay = currentOpenTip ? 60 : 240;
+      openTimer = setTimeout(() => showTip(group, tip), delay);
+    });
+
+    group.addEventListener('pointerleave', () => {
+      if (suppressedGroup === group) suppressedGroup = null;
+      clearTimeout(openTimer);
+      closeTimer = setTimeout(() => hideTip(tip), 120);
+    });
+
+    group.addEventListener('pointerdown', (e) => {
+      if (e.target.closest('input, select, button, .toggle')) {
+        suppressedGroup = group;
+        clearTimeout(openTimer);
+        clearTimeout(closeTimer);
+        hideTip(tip);
+      }
+    });
+
+    group.addEventListener('focusin', (e) => {
+      let isKeyboardFocus = false;
+      try { isKeyboardFocus = !!e.target?.matches?.(':focus-visible'); } catch (err) {}
+      if (!isKeyboardFocus) return;
+      clearTimeout(closeTimer);
+      clearTimeout(openTimer);
+      showTip(group, tip);
+    });
+
+    group.addEventListener('focusout', (e) => {
+      if (e.relatedTarget && (group.contains(e.relatedTarget) || tip.contains(e.relatedTarget))) return;
+      clearTimeout(openTimer);
+      hideTip(tip);
+    });
+
+    tip.addEventListener('pointerenter', () => clearTimeout(closeTimer));
+    tip.addEventListener('pointerleave', () => {
+      closeTimer = setTimeout(() => hideTip(tip), 120);
+    });
+  });
+
+  if (!hasNativePopover) {
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && currentOpenTip) {
+        hideTip(currentOpenTip);
+      }
+    });
+    document.addEventListener('click', (e) => {
+      if (currentOpenTip && !currentOpenTip.contains(e.target) && !activeGroup?.contains(e.target)) {
+        hideTip(currentOpenTip);
+      }
+    });
+  }
+}
+
+initControlHoverTooltips();
 
 // --- Mascot Dither Pets data ---
 const ditherPets = {
