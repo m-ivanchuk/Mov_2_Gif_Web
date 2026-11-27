@@ -279,8 +279,8 @@
                     <span id="trim-timeline-end">0:00.0</span>
                   </div>
 
-                  <input type="range" id="trim-start" min="0" max="0" value="0" step="1" class="hidden" tabindex="-1" aria-hidden="true">
-                  <input type="range" id="trim-end" min="0" max="0" value="0" step="1" class="hidden" tabindex="-1" aria-hidden="true">
+                  <input type="range" id="trim-start" min="0" max="0" value="0" step="0.1" class="hidden" tabindex="-1" aria-hidden="true">
+                  <input type="range" id="trim-end" min="0" max="0" value="0" step="0.1" class="hidden" tabindex="-1" aria-hidden="true">
 
                   <span class="hint" id="trim-hint">Keeping all frames</span>
                 </div>
@@ -382,9 +382,6 @@
                       </select>
                       <div id="hint-dither" popover="hint" role="tooltip" class="kawaii-tooltip">Simulates missing shades with dot patterns. Floyd-Steinberg is smoothest for gradients; "No Dither" produces the smallest files for flat UI or pixel art.</div>
                     </div>
-
-                <input type="range" id="trim-start" min="0" max="0" value="0" step="0.1" class="hidden" tabindex="-1" aria-hidden="true">
-                <input type="range" id="trim-end" min="0" max="0" value="0" step="0.1" class="hidden" tabindex="-1" aria-hidden="true">
 
                     <div class="setting-group" data-hint-target="hint-playback">
                       <label for="playback" class="kawaii-label">Playback</label>

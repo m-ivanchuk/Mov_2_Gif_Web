@@ -26,7 +26,6 @@ const state = {
   height: 0,
   customPaletteEdited: false,
   customPaletteColors: [],
-  trim: { start: 0, end: 0 },
   crop: { left: 0, right: 0, top: 0, bottom: 0 },
   projects: [],
   activeProjectId: null,
@@ -185,7 +184,7 @@ function createProject(initialSettings = null) {
     width: 0,
     height: 0,
     crop: { left: 0, right: 0, top: 0, bottom: 0 },
-    trim: { cutStart: 0, cutEnd: 0 },
+    trim: { start: 0, end: 0 },
     settings: { ...DEFAULT_SETTINGS, ...(initialSettings || {}) },
     palette: createEmptyPalette(),
     cards: [],
@@ -219,9 +218,10 @@ function saveActiveProjectControls() {
   const project = getActiveProject();
   if (!project) return;
   project.settings = readControlsSettings();
+  const trim = getTrimState();
   project.trim = {
-    cutStart: parseInt(trimStartSlider?.value, 10) || 0,
-    cutEnd: parseInt(trimEndSlider?.value, 10) || 0
+    start: trim.startTime,
+    end: trim.endTime
   };
 }
 
@@ -366,7 +366,7 @@ window.addEventListener('DOMContentLoaded', initFFmpeg);
 fpsSlider.addEventListener('input', (e) => {
   fpsValue.textContent = e.target.value;
   updateSliderFill(e.target);
-  updateTrimControls();
+  updateTrimControls('fps');
   saveActiveProjectControls();
 });
 
@@ -519,13 +519,13 @@ function snapTrimTime(seconds, totalDuration) {
 
 function getTrimState() {
   const project = getActiveProject();
-  const durationSeconds = project?.durationSeconds || 0;
+  const totalDuration = Math.max(0, project?.durationSeconds || 0);
   const fps = parseInt(fpsSlider.value, 10) || 12;
-  const totalDuration = Math.max(0, durationSeconds || state.durationSeconds || 0);
   const minGap = getMinTrimDuration(totalDuration);
+  const projectTrim = project?.trim || { start: 0, end: 0 };
 
-  let startTime = Number.isFinite(state.trim.start) ? state.trim.start : 0;
-  let endTime = Number.isFinite(state.trim.end) && state.trim.end > 0 ? state.trim.end : totalDuration;
+  let startTime = Number.isFinite(projectTrim.start) ? projectTrim.start : 0;
+  let endTime = Number.isFinite(projectTrim.end) && projectTrim.end > 0 ? projectTrim.end : totalDuration;
 
   startTime = Math.max(0, Math.min(startTime, Math.max(0, totalDuration - minGap)));
   endTime = Math.max(Math.min(totalDuration, startTime + minGap), Math.min(endTime, totalDuration));
@@ -570,7 +570,7 @@ function clientXToTime(clientX) {
   if (!trimRangeAxis) return 0;
   const rect = trimRangeAxis.getBoundingClientRect();
   const t = rect.width <= 0 ? 0 : (clientX - rect.left) / rect.width;
-  const totalDuration = Math.max(0, state.durationSeconds || 0);
+  const totalDuration = Math.max(0, getActiveProject()?.durationSeconds || 0);
   return snapTrimTime(Math.max(0, Math.min(1, t)) * totalDuration, totalDuration);
 }
 
@@ -647,9 +647,14 @@ function seekTrimPreview(handle) {
 }
 
 function updateTrimControls(changed) {
+  const project = getActiveProject();
   const trim = getTrimState();
-  state.trim.start = trim.startTime;
-  state.trim.end = trim.endTime;
+  if (project) {
+    project.trim = {
+      start: trim.startTime,
+      end: trim.endTime
+    };
+  }
 
   if (trimStartSlider) {
     trimStartSlider.max = trim.totalDuration.toFixed(3);
@@ -669,7 +674,7 @@ function updateTrimControls(changed) {
     trimKeptBadge.textContent = trim.active ? `${trim.duration.toFixed(1)}s` : 'All';
   }
   if (trimHint) {
-    if (!durationSeconds) {
+    if (!trim.totalDuration) {
       trimHint.textContent = 'Keeping all frames';
     } else if (!trim.active) {
       trimHint.textContent = `Keeping full clip · ~${trim.totalFrames} frames at ${trim.fps} FPS`;
@@ -691,24 +696,31 @@ function updateTrimControls(changed) {
 }
 
 function applyTrimHandleTime(handle, seconds) {
-  const totalDuration = Math.max(0, state.durationSeconds || 0);
-  if (!totalDuration) return;
+  const project = getActiveProject();
+  const totalDuration = Math.max(0, project?.durationSeconds || 0);
+  if (!project || !totalDuration) return;
   const trim = getTrimState();
   const minGap = getMinTrimDuration(totalDuration);
 
   if (handle === 'start') {
     const maxStart = Math.max(0, trim.endTime - minGap);
-    state.trim.start = Math.max(0, Math.min(seconds, maxStart));
+    project.trim = {
+      start: Math.max(0, Math.min(seconds, maxStart)),
+      end: trim.endTime
+    };
     updateTrimControls('start');
   } else {
     const minEnd = Math.min(totalDuration, trim.startTime + minGap);
-    state.trim.end = Math.max(minEnd, Math.min(seconds, totalDuration));
+    project.trim = {
+      start: trim.startTime,
+      end: Math.max(minEnd, Math.min(seconds, totalDuration))
+    };
     updateTrimControls('end');
   }
 }
 
 function nudgeTrimHandle(handle, dir, stepSeconds = TRIM_STEP_SECONDS) {
-  const totalDuration = Math.max(0, state.durationSeconds || 0);
+  const totalDuration = Math.max(0, getActiveProject()?.durationSeconds || 0);
   if (!totalDuration) return;
   const trim = getTrimState();
   const current = handle === 'start' ? trim.startTime : trim.endTime;
@@ -1882,10 +1894,6 @@ function renderActiveProjectWorkspace() {
     workspacePanel.classList.toggle('is-empty', !project.file);
   }
 
-  // Restore trim values before applySettingsToControls (which calls updateTrimControls)
-  if (trimStartSlider) trimStartSlider.value = project.file ? (project.trim.cutStart || 0) : 0;
-  if (trimEndSlider) trimEndSlider.value = project.file ? (project.trim.cutEnd || 0) : 0;
-
   applySettingsToControls(project.settings);
 
   if (project.file) {
@@ -1976,7 +1984,7 @@ function closeProject(projectId) {
     project.width = 0;
     project.height = 0;
     project.crop = { left: 0, right: 0, top: 0, bottom: 0 };
-    project.trim = { cutStart: 0, cutEnd: 0 };
+    project.trim = { start: 0, end: 0 };
     project.palette = createEmptyPalette();
     project.cards = [];
     renderProjectTabs();
@@ -2517,7 +2525,7 @@ async function loadFileIntoProject(file, project, options = {}) {
     project.width = probed.width;
     project.height = probed.height;
     project.crop = { left: 0, right: 0, top: 0, bottom: 0 };
-    project.trim = { cutStart: 0, cutEnd: 0 };
+    project.trim = { start: 0, end: project.durationSeconds };
 
     if (!project.customName) {
       project.name = file.name.replace(/\.[^.]+$/, '') || file.name;
@@ -2842,9 +2850,9 @@ function createResultCard(id, settings, projectId) {
       };
       applySettingsToControls(project.settings);
 
-      state.trim = sData.trimActive
-        ? { start: sData.trimStart || 0, end: sData.trimEnd || (state.durationSeconds || 0) }
-        : { start: 0, end: state.durationSeconds || 0 };
+      project.trim = sData.trimActive
+        ? { start: sData.trimStart || 0, end: sData.trimEnd || (project.durationSeconds || 0) }
+        : { start: 0, end: project.durationSeconds || 0 };
       updateTrimControls();
 
       project.crop = {
