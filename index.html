@@ -267,7 +267,7 @@
                     <button type="button" id="trim-preview-play" class="trim-preview-play" aria-label="Play trimmed range">▶</button>
                   </div>
                 </div>
-                <p id="trim-preview-fallback" class="trim-fallback">No browser preview for this file — trim by frame count, then check the GIF.</p>
+                <p id="trim-preview-fallback" class="trim-fallback">No browser preview for this file — trim by timecode, then check the GIF.</p>
                 <p id="trim-frame-label" class="trim-frame-label">Move a handle to scrub the keep range</p>
                 <div class="crop-meta">
                   <span class="hint" id="crop-hint">Keeping full frame</span>
@@ -303,8 +303,8 @@
                   <span id="trim-timeline-end">0:00.0</span>
                 </div>
 
-                <input type="range" id="trim-start" min="0" max="0" value="0" step="1" class="hidden" tabindex="-1" aria-hidden="true">
-                <input type="range" id="trim-end" min="0" max="0" value="0" step="1" class="hidden" tabindex="-1" aria-hidden="true">
+                <input type="range" id="trim-start" min="0" max="0" value="0" step="0.1" class="hidden" tabindex="-1" aria-hidden="true">
+                <input type="range" id="trim-end" min="0" max="0" value="0" step="0.1" class="hidden" tabindex="-1" aria-hidden="true">
 
                 <span class="hint" id="trim-hint">Keeping all frames</span>
               </div>
