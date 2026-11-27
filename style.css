@@ -115,13 +115,13 @@ body::before {
   flex-direction: column;
   align-items: center;
   min-height: 100vh;
-  padding: 40px 20px 32px;
+  padding: 36px clamp(16px, 2.5vw, 48px) 32px;
   width: 100%;
 }
 
 .app-main {
   width: 100%;
-  max-width: 1320px;
+  max-width: 2400px;
   margin-top: 10px;
 }
 
@@ -131,7 +131,7 @@ body::before {
   margin-bottom: 32px;
   position: relative;
   width: 100%;
-  max-width: 1320px;
+  max-width: 2400px;
 }
 
 .logo-area {
@@ -626,10 +626,10 @@ body::before {
   box-shadow: 0px 0px 0px var(--line-dark);
 }
 
-/* ---------- Workspace Layout (2 cols Editor + 1 col Results) ---------- */
+/* ---------- Workspace Layout (Responsive Editor + Multi-column Results) ---------- */
 .workspace {
   display: grid;
-  grid-template-columns: minmax(0, 2fr) minmax(320px, 1fr);
+  grid-template-columns: minmax(0, 1.85fr) minmax(340px, 1fr);
   gap: 24px;
   align-items: start;
 }
@@ -707,6 +707,20 @@ body::before {
 .workspace-results {
   align-self: start;
   min-width: 0;
+  container-type: inline-size;
+  container-name: results-pane;
+}
+
+@media (min-width: 1680px) {
+  .workspace {
+    grid-template-columns: minmax(780px, 1.35fr) minmax(640px, 1fr);
+  }
+}
+
+@media (min-width: 2160px) {
+  .workspace {
+    grid-template-columns: minmax(900px, 1.15fr) minmax(960px, 1fr);
+  }
 }
 
 @media (max-width: 1100px) {
@@ -2016,6 +2030,18 @@ body::before {
   grid-template-columns: 1fr;
   gap: 20px;
   align-items: start;
+}
+
+@container results-pane (min-width: 620px) {
+  .results-feed {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@container results-pane (min-width: 940px) {
+  .results-feed {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
 }
 
 @media (max-width: 1100px) {

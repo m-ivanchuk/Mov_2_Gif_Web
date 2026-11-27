@@ -974,13 +974,24 @@ let cropDrag = null;
 function layoutMediaStage() {
   const project = getActiveProject();
   if (!mediaCanvas || !project?.width || !project?.height) return;
-  const gutterX = 48;
-  const maxW = Math.max(80, ((trimPreviewWrap && trimPreviewWrap.clientWidth) ? trimPreviewWrap.clientWidth : 640) - gutterX);
-  const maxH = window.innerWidth <= 740 ? 240 : 340;
+  const gutterX = 52;
+  const wrapWidth = (trimPreviewWrap && trimPreviewWrap.clientWidth) ? trimPreviewWrap.clientWidth : 640;
+  const maxW = Math.max(80, wrapWidth - gutterX);
+  const maxH = window.innerWidth <= 740
+    ? Math.max(220, Math.min(340, Math.round(window.innerHeight * 0.38)))
+    : Math.max(360, Math.min(680, Math.round(window.innerHeight * 0.54)));
   const fit = Math.min(maxW / project.width, maxH / project.height);
   mediaCanvas.style.width = `${Math.max(1, Math.round(project.width * fit))}px`;
   mediaCanvas.style.height = `${Math.max(1, Math.round(project.height * fit))}px`;
   updateCropUI();
+}
+
+if (typeof ResizeObserver !== 'undefined' && trimPreviewWrap) {
+  const mediaResizeObserver = new ResizeObserver(() => {
+    const project = getActiveProject();
+    if (project?.file) layoutMediaStage();
+  });
+  mediaResizeObserver.observe(trimPreviewWrap);
 }
 
 function updateCropUI() {
@@ -3104,14 +3115,17 @@ function initControlHoverTooltips() {
       if (suppressedGroup === group) return;
       clearTimeout(closeTimer);
       clearTimeout(openTimer);
-      const delay = currentOpenTip ? 60 : 240;
-      openTimer = setTimeout(() => showTip(group, tip), delay);
+      if (currentOpenTip && currentOpenTip !== tip) {
+        hideTip(currentOpenTip);
+      }
+      openTimer = setTimeout(() => showTip(group, tip), 650);
     });
 
     group.addEventListener('pointerleave', () => {
       if (suppressedGroup === group) suppressedGroup = null;
       clearTimeout(openTimer);
-      closeTimer = setTimeout(() => hideTip(tip), 120);
+      clearTimeout(closeTimer);
+      hideTip(tip);
     });
 
     group.addEventListener('pointerdown', (e) => {
